@@ -15,7 +15,7 @@ def get_summarizer():
     return summarizer
 
 def chunk_text(text: str, max_chunk_size: int = 2000) -> list:
-    \"\"\"Split long document text into chunks appropriate for transformer input size.\"\"\"
+    """Split long document text into chunks appropriate for transformer input size."""
     lines = text.split("\n")
     chunks = []
     current_chunk = []
@@ -36,10 +36,10 @@ def chunk_text(text: str, max_chunk_size: int = 2000) -> list:
     return chunks
 
 def run_summarization(text: str) -> dict:
-    \"\"\"
+    """
     Run the Summarizer pipeline.
     Text Cleaning -> Chunk -> Summarize -> Merge
-    \"\"\"
+    """
     if not text.strip():
         return {"error": "Empty text provided."}
         

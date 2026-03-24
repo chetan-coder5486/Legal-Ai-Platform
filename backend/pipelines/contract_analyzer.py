@@ -1,49 +1,114 @@
-from transformers import pipeline
+import re
+from sentence_transformers import SentenceTransformer, util
 from backend.services.risk_engine import assess_risk
 
-classifier = None
+# Global variables (loaded once)
+model = None
+label_embeddings = None
 
-def get_classifier():
-    global classifier
-    if classifier is None:
-        print("Loading Legal-BERT classifier...")
-        # For prototype, we'll use a zero-shot classifier or a specific legal-bert model.
-        # Since fine-tuning legal-bert for clause classification takes time, 
-        # let's use a general zero-shot classification with legal labels for now.
-        classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
-    return classifier
+# Define labels (make them descriptive for better accuracy)
+labels = [
+    "Termination clause about ending agreement",
+    "Liability clause about damages and responsibility",
+    "Confidentiality clause about data protection",
+    "Payment clause about fees and billing",
+    "Warranties clause about guarantees",
+    "Governing law clause about jurisdiction"
+]
 
+
+# -----------------------------
+# Load model (only once)
+# -----------------------------
+def get_model():
+    global model, label_embeddings
+
+    if model is None:
+        print("Loading Sentence Transformer model...")
+        model = SentenceTransformer('all-MiniLM-L6-v2')
+
+        # Precompute label embeddings
+        label_embeddings = model.encode(labels, convert_to_tensor=True)
+
+    return model
+
+
+# -----------------------------
+# Clause Segmentation
+# -----------------------------
 def segment_clauses(text: str) -> list:
-    \"\"\"
-    Basic segmentation of a contract into clauses.
-    In reality, requires regex for numbering (e.g., 1.1, Article II) or NLP sentence splitting.
-    \"\"\"
-    # Naive split by double newline for now
-    raw_clauses = text.split("\n\n")
-    return [c.strip() for c in raw_clauses if len(c.strip()) > 20]
+    """
+    Robust clause segmentation for messy legal text
+    """
 
+    # Step 1: Normalize spacing
+    text = re.sub(r'\r', '\n', text)
+    text = re.sub(r'\n+', '\n', text)  # collapse multiple newlines
+
+    # Step 2: FIX broken lines (IMPORTANT)
+    # Join lines that are split mid-sentence
+    text = re.sub(r'(?<!\n)\n(?!\n)', ' ', text)
+
+    # Step 3: Split using clause numbers (1., 2., 3.)
+    pattern = r'(?=\s\d+\.\s)'
+
+    clauses = re.split(pattern, text)
+
+    # Step 4: Clean
+    clauses = [c.strip() for c in clauses if len(c.strip()) > 50]
+
+    return clauses
+
+
+# -----------------------------
+# Clause Classification
+# -----------------------------
+def classify_clause(clause: str):
+    model = get_model()
+
+    # Limit input length
+    clause = clause[:500]
+
+    clause_emb = model.encode(clause, convert_to_tensor=True)
+
+    scores = util.cos_sim(clause_emb, label_embeddings)[0]
+
+    best_idx = scores.argmax().item()
+
+    return labels[best_idx], float(scores[best_idx])
+
+
+# -----------------------------
+# Main Pipeline
+# -----------------------------
 def run_contract_analysis(text: str) -> dict:
-    \"\"\"
-    Run the Contract Analysis pipeline.
-    Segments clauses -> Classifies them -> Runs through Risk Engine -> Aggregates results
-    \"\"\"
+    """
+    Full pipeline:
+    1. Segment clauses
+    2. Classify each clause
+    3. Run risk engine
+    4. Return structured output
+    """
+
     clauses = segment_clauses(text)
-    cls_model = get_classifier()
-    
-    labels = ["Termination", "Liability", "Confidentiality", "Payment", "Warranties", "Governing Law"]
-    
+
     analyzed_clauses = []
-    
-    # Just analyze the first 10 clauses to save time for MVP
-    for clause in clauses[:10]:
+
+    for clause in clauses[:5]:  # limit for speed (MVP)
         try:
-            result = cls_model(clause, labels, multi_label=False)
-            top_label = result['labels'][0]
-            confidence = result['scores'][0]
-            
-            # Run risk engine
-            risk_assessment = assess_risk(clause, top_label)
-            
+            # Step 1: Classification
+            top_label, confidence = classify_clause(clause)
+
+            # Step 2: Risk Engine
+            try:
+                risk_assessment = assess_risk(clause, top_label)
+            except Exception:
+                risk_assessment = {
+                    "level": "UNKNOWN",
+                    "reason": "Risk engine failed"
+                }
+
+            # Step 3: Store result
             analyzed_clauses.append({
                 "clause_text": clause,
                 "type": top_label,
@@ -51,11 +116,12 @@ def run_contract_analysis(text: str) -> dict:
                 "risk_level": risk_assessment["level"],
                 "risk_reason": risk_assessment["reason"]
             })
+
         except Exception as e:
-            print(f"Error classifying clause: {e}")
-            
+            print(f"Error processing clause: {e}")
+
     return {
-        "pipeline": "Contract Analysis",
+        "pipeline": "Contract Analysis (Embedding-Based)",
         "total_clauses_detected": len(clauses),
         "analyzed_clauses": analyzed_clauses
     }
