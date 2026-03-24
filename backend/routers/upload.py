@@ -10,39 +10,40 @@ async def upload_document(
     file: UploadFile = File(...),
     task_type: str = Form("analyze_contract")
 ) -> Dict[str, Any]:
+    """
+    Upload a document and route it to the correct AI pipeline.
+    """
 
-    """
-    Endpoint to upload a document (PDF, DOCX, TXT) and trigger a specific workflow pipeline.
-    """
     try:
-        # Read file bytes
+        # 1️⃣ Read file
         file_bytes = await file.read()
-        
-        # 1. Parse document into clean text
+
+        # 2️⃣ Parse document → text
         text = parse_document(file.filename, file_bytes)
-        
-        if not text:
-            raise HTTPException(status_code=400, detail="Could not extract text from document.")
-            
-        # 2. Route to orchestrator to run the correct pipeline
-        # (For now, since pipelines aren't fully implemented, this might just return a mock or fail if not handled)
-        # We will wrap it in a try-except to return the raw text if pipelines are missing.
+
+        if text is None or text.strip() == "":
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract text from document."
+            )
+
+        # 3️⃣ Route to correct pipeline
         try:
             result = route_document(text, task_type=task_type)
         except Exception as e:
-            # Fallback for now during development: just return the extracted text snippet
             result = {
-                "message": "Pipeline not fully implemented yet.",
+                "message": "Pipeline not fully implemented yet",
                 "preview": text[:500] + "...",
-                "error_details": str(e)
+                "error": str(e)
             }
-            
+
+        # 4️⃣ Return response
         return {
             "status": "success",
             "filename": file.filename,
             "task": task_type,
             "results": result
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

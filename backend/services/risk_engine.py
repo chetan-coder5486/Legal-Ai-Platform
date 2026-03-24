@@ -1,7 +1,7 @@
 def assess_risk(clause_text: str, clause_type: str) -> dict:
-    \"\"\"
+    """
     Rule-based engine to determine risk based on clause content and classified type.
-    \"\"\"
+    """
     clause_lower = clause_text.lower()
     
     level = "LOW"

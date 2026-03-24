@@ -1,9 +1,9 @@
 from backend.pipelines.research_agent import search_precedents
 
 def generate_explanation(risk_analysis: dict) -> dict:
-    \"\"\"
+    """
     Combines outputs from the Risk Engine and Research Agent to provide a human-readable explanation.
-    \"\"\"
+    """
     clause_text = risk_analysis.get("clause_text", "")
     risk_level = risk_analysis.get("risk_level", "LOW")
     risk_reason = risk_analysis.get("risk_reason", "")

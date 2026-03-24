@@ -11,9 +11,9 @@ def get_embedder():
     return embedder
 
 def search_precedents(query: str, top_k: int = 2) -> list:
-    \"\"\"
+    """
     Embeds a risky clause and searches for similar legal precedents in Vector DB.
-    \"\"\"
+    """
     model = get_embedder()
     query_embedding = model.encode(query).tolist()
     
@@ -41,9 +41,9 @@ def search_precedents(query: str, top_k: int = 2) -> list:
     ]
 
 def summarize_cases(precedents: list) -> str:
-    \"\"\"
+    """
     In a full RAG implementation, this would pass the precedents to an LLM for synthesis.
-    \"\"\"
+    """
     if not precedents:
         return "No relevant legal precedents found."
         
