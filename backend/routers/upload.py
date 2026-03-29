@@ -40,7 +40,7 @@ async def upload_document(
         # 4️⃣ Return response
         return {
             "status": "success",
-            "parsed": text,  #for testing   delete later
+            "parsed": text,
             "filename": file.filename,
             "task": task_type,
             "results": result

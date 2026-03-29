@@ -1,52 +1,175 @@
-import pdfplumber
-import fitz  # PyMuPDF
-import docx
 import io
+import re
+import fitz        # PyMuPDF
+import pdfplumber
+import docx
+
+# ─── Optional OCR (only needed for scanned PDFs) ───────────────────────────
+
+import pytesseract
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+try:
+    from PIL import Image
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+
+
+# ─── PDF extraction ────────────────────────────────────────────────────────
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
-    """Extract text from a PDF file using PyMuPDF (fast) or pdfplumber (accurate)."""
-    text = ""
-    try:
-        # Try PyMuPDF first for speed
-        pdf_document = fitz.open(stream=file_bytes, filetype="pdf")
-        for page_num in range(pdf_document.page_count):
-            page = pdf_document.load_page(page_num)
-            text += page.get_text()
-    except Exception as e:
-        print(f"PyMuPDF failed: {e}. Falling back to pdfplumber.")
-        try:
-            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-                for page in pdf.pages:
-                    extracted = page.extract_text()
-                    if extracted:
-                        text += extracted + "\n"
-        except Exception as fallback_e:
-             print(f"pdfplumber failed: {fallback_e}")
-    
+    """
+    Multi-strategy PDF text extraction with structure preservation.
+
+    Strategy order:
+      1. PyMuPDF with layout-aware 'blocks' extraction (fast, preserves structure)
+      2. pdfplumber (more accurate for complex layouts / tables)
+      3. pytesseract OCR (for scanned / image-only PDFs)
+    """
+    text = _extract_with_pymupdf(file_bytes)
+
+    # If PyMuPDF yields too little text, the PDF is likely scanned or badly encoded
+    if len(text.strip()) < 100:
+        text = _extract_with_pdfplumber(file_bytes)
+
+    # Final fallback: OCR page-by-page
+    if len(text.strip()) < 100:
+        text = _extract_with_ocr(file_bytes)
+
     return text
+
+
+def _extract_with_pymupdf(file_bytes: bytes) -> str:
+    """
+    Layout-aware extraction using PyMuPDF's 'blocks' mode.
+    Sorts blocks top-to-bottom and preserves paragraph boundaries.
+    """
+    pages_text = []
+    try:
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        for page in doc:
+            blocks = page.get_text("blocks")          # returns list of (x0,y0,x1,y1,text,…)
+            # Sort blocks top-to-bottom, left-to-right
+            blocks.sort(key=lambda b: (round(b[1] / 20), b[0]))
+            page_lines = []
+            for block in blocks:
+                block_text = block[4].strip()
+                if block_text:
+                    page_lines.append(block_text)
+            if page_lines:
+                pages_text.append("\n\n".join(page_lines))
+    except Exception as e:
+        print(f"[parsers] PyMuPDF failed: {e}")
+    return "\n\n".join(pages_text)
+
+
+def _extract_with_pdfplumber(file_bytes: bytes) -> str:
+    """
+    Accurate extraction for complex layouts using pdfplumber.
+    Falls back gracefully if a page fails.
+    """
+    pages_text = []
+    try:
+        with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+            for page in pdf.pages:
+                extracted = page.extract_text(x_tolerance=3, y_tolerance=3)
+                if extracted:
+                    pages_text.append(extracted.strip())
+    except Exception as e:
+        print(f"[parsers] pdfplumber failed: {e}")
+    return "\n\n".join(pages_text)
+
+
+def _extract_with_ocr(file_bytes: bytes) -> str:
+    """
+    OCR fallback for scanned / image-only PDFs using pytesseract.
+    Renders each page as a high-resolution image before OCR.
+    Requires: pip install pytesseract pillow
+    """
+    if not OCR_AVAILABLE:
+        print("[parsers] OCR unavailable — install pytesseract and Pillow.")
+        return ""
+
+    pages_text = []
+    try:
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        for page in doc:
+            # Render at 2x resolution for better OCR accuracy
+            mat = fitz.Matrix(2.0, 2.0)
+            pix = page.get_pixmap(matrix=mat)
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            ocr_text = pytesseract.image_to_string(img, config="--psm 6")
+            if ocr_text.strip():
+                pages_text.append(ocr_text.strip())
+    except Exception as e:
+        print(f"[parsers] OCR failed: {e}")
+    return "\n\n".join(pages_text)
+
+
+# ─── DOCX extraction ───────────────────────────────────────────────────────
 
 def extract_text_from_docx(file_bytes: bytes) -> str:
-    """Extract text from a Word document."""
+    """
+    Extract text from Word documents, preserving paragraph structure.
+    Skips empty paragraphs to avoid blank-line noise.
+    """
     doc = docx.Document(io.BytesIO(file_bytes))
-    return "\n".join([paragraph.text for paragraph in doc.paragraphs])
+    paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+    return "\n\n".join(paragraphs)
+
+
+# ─── Text cleaning ─────────────────────────────────────────────────────────
 
 def clean_text(text: str) -> str:
-    """Basic text cleaning."""
-    # Remove excessive whitespace
-    text = " ".join(text.split())
-    return text
+    """
+    Clean extracted text while PRESERVING paragraph / clause boundaries.
+
+    Key fix vs original: we no longer collapse all whitespace into one line.
+    The clause segmenter downstream depends on double-newlines to find
+    paragraph breaks.
+    """
+    # Normalise Windows-style line endings
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Collapse 3+ consecutive blank lines into exactly 2
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    # Remove non-printable characters (but keep standard whitespace)
+    text = re.sub(r"[^\S\n]+", " ", text)       # collapse spaces/tabs on a line
+    text = re.sub(r" *\n *", "\n", text)         # trim spaces around line breaks
+
+    # Remove page-number artifacts like "- 3 -" or "Page 3 of 10"
+    text = re.sub(r"(?i)(page\s+\d+\s+of\s+\d+|\-\s*\d+\s*\-)", "", text)
+
+    return text.strip()
+
+
+# ─── Main entry point ──────────────────────────────────────────────────────
 
 def parse_document(filename: str, file_bytes: bytes) -> str:
-    """Main entry point for parsing uploaded documents."""
-    ext = filename.split(".")[-1].lower()
-    
+    """
+    Route the uploaded file to the correct extractor, then clean the result.
+    Returns a structured string with paragraph breaks intact.
+    Raises ValueError for unsupported formats.
+    """
+    ext = filename.rsplit(".", 1)[-1].lower()
+
     if ext == "pdf":
         raw_text = extract_text_from_pdf(file_bytes)
-    elif ext in ["doc", "docx"]:
+    elif ext in ("doc", "docx"):
         raw_text = extract_text_from_docx(file_bytes)
     elif ext == "txt":
-        raw_text = file_bytes.decode("utf-8")
+        raw_text = file_bytes.decode("utf-8", errors="replace")
     else:
-        raise ValueError(f"Unsupported file format: {ext}")
-    
-    return clean_text(raw_text)
+        raise ValueError(f"Unsupported file format: .{ext}")
+
+    cleaned = clean_text(raw_text)
+
+    if not cleaned:
+        raise ValueError(
+            "No text could be extracted from this document. "
+            "It may be a scanned image PDF without OCR support."
+        )
+
+    return cleaned
