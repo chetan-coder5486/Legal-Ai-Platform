@@ -1,236 +1,161 @@
 import re
-from sentence_transformers import SentenceTransformer, util
+from transformers import pipeline as hf_pipeline
 from backend.services.risk_engine import assess_risk
 
-# -----------------------------
-# GLOBALS
-# -----------------------------
-model = None
-label_embeddings = None
+# ─── NLI Classifier (lazy-loaded) ─────────────────────────────────────────
+_classifier = None
 
-labels = [
-    "Termination clause about ending agreement",
-    "Liability clause about damages and responsibility",
-    "Confidentiality clause about data protection",
-    "Payment clause about fees and billing",
-    "Warranties clause about guarantees",
-    "Governing law clause about jurisdiction"
-    "Duration clause about time period",
-    "Purpose clause about agreement objective",
-    "Intellectual property clause about ownership",
-    "Exception clause about exclusions",
-    "Disclosure clause about sharing information",
-    "Obligation clause about responsibilities"
+# Short, clear labels work best with NLI — the model infers meaning
+LABELS = [
+    "Termination",
+    "Liability",
+    "Confidentiality",
+    "Payment",
+    "Warranties",
+    "Governing Law",
+    "Indemnification",
+    "Force Majeure",
+    "Intellectual Property",
+    "Dispute Resolution",
 ]
 
-CONFIDENCE_THRESHOLD = 0.4
+
+def get_classifier():
+    """Lazy-load the NLI classifier so the server starts fast."""
+    global _classifier
+    if _classifier is None:
+        print("Loading Zero-Shot NLI model (DeBERTa)...")
+        _classifier = hf_pipeline(
+            "zero-shot-classification",
+            model="MoritzLaurer/deberta-v3-base-zeroshot-v2.0",
+        )
+    return _classifier
+
+
+# ─── Clause heading patterns (compiled once) ──────────────────────────────
+
+# Matches lines that look like clause / section headings
+_HEADING_RE = re.compile(
+    r"""
+    ^[ \t]*                                  # optional leading whitespace
+    (?:
+        (?:article|section|clause|schedule|exhibit|annex|recital|part)
+            \s+[\w.]+                        # "Article I", "Section 2.3"
+      | \d+(?:\.\d+)*\.?\s                   # "1. ", "1.1 ", "12.3.1 "
+      | \([a-z]\)\s                          # "(a) "
+      | \([ivxlc]+\)\s                       # "(i) ", "(iv) "
+      | [A-Z][A-Z\s]{4,}$                    # ALL CAPS heading (≥5 chars)
+    )
+    """,
+    re.IGNORECASE | re.MULTILINE | re.VERBOSE,
+)
+
+# Minimum characters for a clause to survive the final filter
+_MIN_CLAUSE_LENGTH = 50
 
 
 # -----------------------------
-# MODEL LOADER
+# Clause Segmentation
 # -----------------------------
-def get_model():
-    global model, label_embeddings
+def segment_clauses(text: str) -> list:
+    """
+    Robust, multi-strategy clause segmentation for legal text.
 
-    if model is None:
-        print("Loading Sentence Transformer model...")
-        model = SentenceTransformer('all-MiniLM-L6-v2')
-        label_embeddings = model.encode(labels, convert_to_tensor=True)
+    Strategy order:
+      1. Detect heading lines (numbered, titled, ALL CAPS) and split on them.
+      2. If no headings found, fall back to splitting on paragraph boundaries
+         (double-newline, which clean_text preserves).
+      3. Merge tiny fragments (< _MIN_CLAUSE_LENGTH) into the previous clause.
+      4. Drop anything still under the minimum length after merging.
+    """
 
-    return model
+    # ── Step 1: normalise line endings (preserve double-newlines!) ────────
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
 
+    # ── Step 2: try heading-based splitting ───────────────────────────────
+    #    Find all positions where a heading line starts.
+    split_positions = [m.start() for m in _HEADING_RE.finditer(text)]
 
-# -----------------------------
-# OCR NORMALIZATION
-# -----------------------------
-def normalize_text(text: str) -> str:
-    corrections = {
-        "Sectlon": "Section",
-        "Artlcle": "Article",
-        "Deflnltlons": "Definitions",
-        "Agreernent": "Agreement",
-    }
+    if split_positions:
+        # Make sure we capture any preamble before the first heading
+        if split_positions[0] != 0:
+            split_positions.insert(0, 0)
 
-    for wrong, correct in corrections.items():
-        text = text.replace(wrong, correct)
+        raw_clauses = []
+        for i, pos in enumerate(split_positions):
+            end = split_positions[i + 1] if i + 1 < len(split_positions) else len(text)
+            chunk = text[pos:end].strip()
+            if chunk:
+                raw_clauses.append(chunk)
+    else:
+        # ── Step 2b: fall back to paragraph-boundary splitting ────────────
+        raw_clauses = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
 
-    # Force subclauses onto new lines (OCR fix)
-    text = re.sub(r'([a-z])\)\s+', r'\n\1) ', text)
-    text = re.sub(r'\r', '\n', text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
-
-    return text
-
-
-# -----------------------------
-# CLAUSE LEVEL DETECTION
-# -----------------------------
-def get_clause_level(title: str) -> int:
-    title = title.lower()
-
-    if re.match(r'^\d+\.', title):
-        return 1
-    elif re.match(r'^\([a-z]\)', title):
-        return 2
-    elif title.startswith(("section", "article")):
-        return 0
-    return 3
-
-
-# -----------------------------
-# CLEAN CLAUSE CONTENT
-# -----------------------------
-def clean_clause_text(text: str) -> str:
-    # remove code noise
-    text = re.sub(r'from\s+\w+\s+import\s+\w+', '', text)
-
-    # fix broken OCR words
-    text = re.sub(r'(\w)\s+(\w)', r'\1\2', text)  # joins split words
-
-    # fix spacing
-    text = re.sub(r'\s+', ' ', text)
-
-    return text.strip()
-
-
-# -----------------------------
-# 🔥 NEW HIERARCHICAL SEGMENTATION
-# -----------------------------
-def segment_clauses(text: str):
-    text = normalize_text(text)
-
-    lines = text.split('\n')
-
-    clauses = []
-    current_clause = None
-
-    main_clause_pattern = r'^\d+\.(\s+.*)?$'
-    sub_clause_pattern = r'^\(?[a-z]\)'
-
-    for line in lines:
-        line = line.strip()
-
-        if not line:
-            continue
-
-        # MAIN CLAUSE
-        if re.match(main_clause_pattern, line):
-            if current_clause:
-                current_clause["content"] = clean_clause_text(current_clause["content"])
-                clauses.append(current_clause)
-
-            parts = line.split('.', 1)
-
-            title = parts[0] + '.'
-            content = parts[1].strip() if len(parts) > 1 else ""
-
-            current_clause = {
-                "title": title,
-                "content": content + " ",
-                "subclauses": [],
-                "level": 1
-            }
-
-        # SUBCLAUSES
-        elif re.match(sub_clause_pattern, line):
-            if current_clause:
-                current_clause["subclauses"].append(line.strip())
-
-        # NORMAL TEXT
+    # ── Step 3: merge tiny fragments into the preceding clause ────────────
+    merged: list[str] = []
+    for clause in raw_clauses:
+        if merged and len(clause) < _MIN_CLAUSE_LENGTH:
+            merged[-1] = merged[-1] + "\n\n" + clause
         else:
-            if current_clause:
-                current_clause["content"] += line + " "
+            merged.append(clause)
 
-    if current_clause:
-        current_clause["content"] = clean_clause_text(current_clause["content"])
-        clauses.append(current_clause)
+    # ── Step 4: final length filter ───────────────────────────────────────
+    clauses = [c for c in merged if len(c) >= _MIN_CLAUSE_LENGTH]
 
     return clauses
 
 
 # -----------------------------
-# SMART TRUNCATION
-# -----------------------------
-def smart_truncate(text, max_len=500):
-    if len(text) <= max_len:
-        return text
-    return text[:max_len].rsplit('.', 1)[0]
-
-
-# -----------------------------
-# CONFIDENCE LABEL
-# -----------------------------
-def get_confidence_label(score):
-    if score > 0.75:
-        return "HIGH"
-    elif score > 0.6:
-        return "MEDIUM"
-    return "LOW"
-
-
-# -----------------------------
-# CLASSIFICATION
+# Clause Classification (NLI)
 # -----------------------------
 def classify_clause(clause: str):
-    model = get_model()
+    """
+    Classify a clause using Zero-Shot Natural Language Inference.
+    Returns (label, confidence_score).
+    """
+    clf = get_classifier()
 
-    clause = smart_truncate(clause)
+    # Truncate to model max-token window (~512 tokens ≈ 1500 chars)
+    result = clf(clause[:1500], candidate_labels=LABELS, multi_label=False)
 
-    clause_emb = model.encode(clause, convert_to_tensor=True)
-    scores = util.cos_sim(clause_emb, label_embeddings)[0]
-
-    best_idx = scores.argmax().item()
-    confidence = float(scores[best_idx])
-
-    if confidence < CONFIDENCE_THRESHOLD:
-        return "Other / Unknown", confidence, "LOW"
-
-    return labels[best_idx], confidence, get_confidence_label(confidence)
+    return result["labels"][0], round(result["scores"][0], 4)
 
 
 # -----------------------------
-# 🔥 MAIN PIPELINE (FIXED)
+# Main Pipeline
 # -----------------------------
 def run_contract_analysis(text: str) -> dict:
+    """
+    Full pipeline:
+    1. Segment clauses
+    2. Classify each clause
+    3. Run risk engine
+    4. Return structured output
+    """
+
     clauses = segment_clauses(text)
 
     analyzed_clauses = []
 
-    for clause_obj in clauses[:12]:
-
-        # 🔥 COMBINE MAIN + SUBCLAUSES
-        full_text = clause_obj["content"]
-
-        if clause_obj["subclauses"]:
-            full_text += " " + " ".join(clause_obj["subclauses"])
-
-        if len(full_text) < 40:
-            continue
-
+    for clause in clauses:  # limit for speed (MVP)
         try:
-            # Classification
-            top_label, confidence, conf_label = classify_clause(full_text)
+            # Step 1: Classification
+            top_label, confidence = classify_clause(clause)
 
-            # Risk
+            # Step 2: Risk Engine
             try:
-                risk_assessment = assess_risk(full_text, top_label)
+                risk_assessment = assess_risk(clause, top_label)
             except Exception:
                 risk_assessment = {
                     "level": "UNKNOWN",
                     "reason": "Risk engine failed"
                 }
 
+            # Step 3: Store result
             analyzed_clauses.append({
-                "title": clause_obj["title"],
-                "level": clause_obj["level"],
-
-                # 🔥 FIXED OUTPUT
-                "clause_text": clause_obj["content"],
-                "subclauses": clause_obj["subclauses"],
-
+                "clause_text": clause,
                 "type": top_label,
                 "confidence": confidence,
-                "confidence_label": conf_label,
                 "risk_level": risk_assessment["level"],
                 "risk_reason": risk_assessment["reason"]
             })
@@ -239,7 +164,7 @@ def run_contract_analysis(text: str) -> dict:
             print(f"Error processing clause: {e}")
 
     return {
-        "pipeline": "Contract Analysis (Structured + Hierarchical + NLP)",
+        "pipeline": "Contract Analysis (Zero-Shot NLI)",
         "total_clauses_detected": len(clauses),
         "analyzed_clauses": analyzed_clauses
     }
