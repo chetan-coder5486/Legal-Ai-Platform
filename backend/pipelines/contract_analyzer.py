@@ -1,5 +1,5 @@
 import re
-from sentence_transformers import SentenceTransformer, util
+from transformers import pipeline as hf_pipeline
 from backend.services.risk_engine import assess_risk
 
 model = None

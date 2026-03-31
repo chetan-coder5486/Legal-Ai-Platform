@@ -68,8 +68,28 @@ const Dashboard = ({ data }) => {
                     </span>
                   </div>
                   
-                  <div style={{ margin: '1rem 0', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '4px', fontStyle: 'italic' }}>
-                    "{clause.clause_text}"
+                  <div style={{ margin: '1rem 0', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
+                    
+                    {/* 🔥 Clause Title */}
+                    <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--accent-color)' }}>
+                      {clause.title}
+                    </div>
+
+                    {/* 🔥 Main Content */}
+                    <div style={{ marginBottom: '0.8rem', lineHeight: '1.6' }}>
+                      {clause.clause_text}
+                    </div>
+
+                    {/* 🔥 Subclauses */}
+                    {clause.subclauses && clause.subclauses.length > 0 && (
+                      <ul style={{ paddingLeft: '1.2rem', marginTop: '0.5rem' }}>
+                        {clause.subclauses.map((sub, index) => (
+                          <li key={index} style={{ marginBottom: '0.3rem' }}>
+                            {sub}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', color: 'var(--text-secondary)' }}>
