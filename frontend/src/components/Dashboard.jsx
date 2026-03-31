@@ -199,25 +199,7 @@ const Dashboard = ({ data }) => {
 
             <div className="clause-list">
               {clauses.map((clause, idx) => (
-                <div key={idx} className={`clause-item risk-${clause.risk_level.toLowerCase()}`}>
-                  <div className="clause-header">
-                    <span className="clause-type">{clause.type}</span>
-                    <span className={`risk-badge ${clause.risk_level.toLowerCase()}`}>
-                      {clause.risk_level} RISK
-                    </span>
-                  </div>
-                  
-                  <div style={{ margin: '1rem 0', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '4px', fontStyle: 'italic' }}>
-                    "{clause.clause_text}"
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', color: 'var(--text-secondary)' }}>
-                    <Info size={20} color="var(--accent-color)" style={{ minWidth: '20px' }} />
-                    <div style={{ whiteSpace: 'pre-line' }}>
-                      {clause.explanation}
-                    </div>
-                  </div>
-                </div>
+                <ClauseCard key={idx} clause={clause} idx={idx} />
               ))}
               
               {clauses.length === 0 && (
