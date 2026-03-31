@@ -1,53 +1,58 @@
 import os
-import anthropic
-from dotenv import load_dotenv
-
+from groq import Groq
 from dotenv import load_dotenv, find_dotenv
-load_dotenv(find_dotenv())
 
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+load_dotenv(find_dotenv(), encoding="utf-8")
+
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 def generate_explanation(risk_analysis: dict) -> dict:
     """
-    Uses Claude to generate a plain-English explanation for each clause.
-    Replaces the old hardcoded 'Standard language detected' message.
+    Uses Groq (free) to generate plain-English clause explanations.
+    Model: llama3-8b-8192 — fast, free, 14400 requests/day
     """
     clause_text = risk_analysis.get("clause_text", "")
     clause_type = risk_analysis.get("type", "Unknown")
     risk_level  = risk_analysis.get("risk_level", "LOW")
     risk_reason = risk_analysis.get("risk_reason", "")
 
-    # Build a focused prompt for Claude
     prompt = f"""You are a legal analyst reviewing an NDA (Non-Disclosure Agreement).
 
 Clause type: {clause_type}
-Risk level:  {risk_level}
+Risk level: {risk_level}
 Risk reason: {risk_reason}
 
 Clause text:
-\"\"\"{clause_text}\"\"\"
+\"\"\"{clause_text[:400]}\"\"\"
 
-Write a 2-3 sentence plain-English explanation of:
+Write exactly 2-3 sentences in plain English explaining:
 1. What this clause means in simple terms
 2. Why the risk level is {risk_level}
 3. One specific thing the signing party should watch out for
 
-Be concise and practical. Do not use legal jargon. Write as if explaining to a business owner."""
+Be concise and practical. No legal jargon."""
 
     try:
-        message = client.messages.create(
-            model="claude-haiku-4-5-20251001",  # fast + cheap for per-clause calls
-            max_tokens=200,
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
             messages=[
-                {"role": "user", "content": prompt}
-            ]
+                {
+                    "role": "system",
+                    "content": "You are a concise legal analyst. Always respond in 2-3 plain English sentences."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            max_tokens=200,
+            temperature=0.3
         )
-        explanation = message.content[0].text.strip()
+        explanation = response.choices[0].message.content.strip()
 
     except Exception as e:
-        print(f"[explainability] Claude API call failed: {e}")
-        # Fallback to basic explanation if API fails
+        print(f"[explainability] Groq API call failed: {e}")
         explanation = (
             f"Clause flagged as {risk_level} RISK.\n"
             f"Reason: {risk_reason}"

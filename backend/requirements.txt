@@ -16,3 +16,4 @@ pytesseract
 Pillow
 anthropic
 python-dotenv
+groq
