@@ -50,7 +50,7 @@ const Dashboard = ({ data }) => {
             
              <div className="glass-panel metric-card" style={{ borderLeft: '4px solid var(--accent-color)', gridColumn: 'span 2' }}>
               <h3>Total Clauses Analyzed</h3>
-              <div className="value">{analysisPayload.total_clauses_detected || clauses.length}</div>
+              <div className="value">{analysisPayload.total_clauses_analyzed ?? analysisPayload.total_clauses_detected ?? clauses.length}</div>
             </div>
           </div>
 

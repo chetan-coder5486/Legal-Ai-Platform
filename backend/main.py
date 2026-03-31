@@ -1,3 +1,6 @@
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv(), encoding="utf-8")
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.routers import upload
