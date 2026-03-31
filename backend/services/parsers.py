@@ -42,25 +42,19 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
 
 def _extract_with_pymupdf(file_bytes: bytes) -> str:
     """
-    Layout-aware extraction using PyMuPDF's 'blocks' mode.
-    Sorts blocks top-to-bottom and preserves paragraph boundaries.
+    Extract text using PyMuPDF in natural reading order.
+    Much better for legal documents than block-based extraction.
     """
     pages_text = []
     try:
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         for page in doc:
-            blocks = page.get_text("blocks")          # returns list of (x0,y0,x1,y1,text,…)
-            # Sort blocks top-to-bottom, left-to-right
-            blocks.sort(key=lambda b: (round(b[1] / 20), b[0]))
-            page_lines = []
-            for block in blocks:
-                block_text = block[4].strip()
-                if block_text:
-                    page_lines.append(block_text)
-            if page_lines:
-                pages_text.append("\n\n".join(page_lines))
+            text = page.get_text("text")  # 🔥 KEY FIX
+            if text.strip():
+                pages_text.append(text.strip())
     except Exception as e:
         print(f"[parsers] PyMuPDF failed: {e}")
+
     return "\n\n".join(pages_text)
 
 
