@@ -1,135 +1,167 @@
 import re
 
-
 def assess_risk(clause_text: str, clause_type: str) -> dict:
-    """
-    Advanced rule-based risk engine with scoring + multi-signal detection.
-
-    Features:
-    - Scoring-based risk classification (LOW / MEDIUM / HIGH)
-    - Detects multiple risk signals in a single clause
-    - Works even if classification is slightly wrong
-    - Produces meaningful explanations
-    """
-
     text = clause_text.lower()
     score = 0
     reasons = []
 
-    # --------------------------------------------------
-    # 🔴 LIABILITY RISKS
-    # --------------------------------------------------
-    if "unlimited liability" in text or "without limit" in text:
+    # -----------------------------
+    # 🔴 LIABILITY
+    # -----------------------------
+    if (
+        "unlimited liability" in text or
+        "without limit" in text or
+        ("liability" in text and "no limit" in text)
+    ):
         score += 5
         reasons.append("Unlimited liability exposure")
 
     if "indirect damages" in text and "exclude" not in text:
-        score += 3
+        score += 2
         reasons.append("Indirect damages not excluded")
 
     if "consequential damages" in text and "exclude" not in text:
-        score += 3
+        score += 2
         reasons.append("Consequential damages not excluded")
 
     if "cap" in text or "limited to" in text:
-        score -= 1  # reduces risk slightly
+        score -= 1
 
-    # --------------------------------------------------
-    # 🔴 TERMINATION RISKS
-    # --------------------------------------------------
+    # -----------------------------
+    # 🔴 TERMINATION
+    # -----------------------------
     if "without cause" in text:
-        score += 4
-        reasons.append("Termination allowed without cause")
+        score += 3
+        reasons.append("Termination without cause")
 
     if "immediate termination" in text:
-        score += 3
-        reasons.append("Immediate termination clause")
+        score += 2
+        reasons.append("Immediate termination")
 
     if "notice" not in text and clause_type == "Termination":
         score += 2
-        reasons.append("No notice period defined")
+        reasons.append("No notice period")
 
     if "cure period" in text:
-        score -= 1  # safer clause
+        score -= 1
 
-    # --------------------------------------------------
-    # 🔴 CONFIDENTIALITY RISKS
-    # --------------------------------------------------
+    # -----------------------------
+    # 🔴 CONFIDENTIALITY
+    # -----------------------------
     year_match = re.search(r'(\d+)\s+year', text)
     if year_match:
         years = int(year_match.group(1))
         if years >= 5:
             score += 2
-            reasons.append(f"Long confidentiality duration ({years} years)")
+            reasons.append(f"Long duration ({years} years)")
+        elif years >= 2:
+            score += 1
 
     if "perpetual" in text:
         score += 3
-        reasons.append("Perpetual confidentiality obligation")
+        reasons.append("Perpetual obligation")
 
-    # --------------------------------------------------
-    # 🔴 PAYMENT RISKS
-    # --------------------------------------------------
-    if "late fee" not in text and clause_type == "Payment":
-        score += 2
-        reasons.append("No late fee protection")
+    # -----------------------------
+    # 🔴 PAYMENT
+    # -----------------------------
+    if clause_type == "Payment":
+        if "late fee" not in text:
+            score += 1
+            reasons.append("No late fee protection")
 
-    if "non-refundable" in text:
-        score += 2
-        reasons.append("Non-refundable payment terms")
-
-    # --------------------------------------------------
-    # 🔴 GOVERNING LAW RISKS
-    # --------------------------------------------------
-    if clause_type == "Governing Law":
-        if not any(j in text for j in ["india", "delaware", "california", "new york"]):
+        if "non-refundable" in text:
             score += 2
-            reasons.append("Unfamiliar or foreign jurisdiction")
+            reasons.append("Non-refundable terms")
 
-    # --------------------------------------------------
-    # 🔴 ONE-SIDED CLAUSE DETECTION
-    # --------------------------------------------------
-    if "receiving party shall" in text and "disclosing party shall" not in text:
+    # -----------------------------
+    # 🔴 GOVERNING LAW
+    # -----------------------------
+    if clause_type == "Governing Law":
+        if "india" not in text:
+            score += 2
+            reasons.append("Foreign jurisdiction")
+
+    # -----------------------------
+    # 🔴 LEGAL / COMPLIANCE (🔥 NEW - IMPORTANT)
+    # -----------------------------
+    if "required by law" in text or "court order" in text or "regulatory" in text:
+        score += 2
+        reasons.append("Mandatory legal disclosure")
+
+    # -----------------------------
+    # 🔴 DATA / RETURN OBLIGATIONS (🔥 NEW)
+    # -----------------------------
+    if "return or destroy" in text:
+        score += 2
+        reasons.append("Strict data return obligation")
+
+    if "certify in writing" in text:
+        score += 1
+        reasons.append("Formal compliance requirement")
+
+    # -----------------------------
+    # 🔴 DURATION / SURVIVAL (🔥 NEW)
+    # -----------------------------
+    if "survive termination" in text or "continuing obligations" in text:
+        score += 2
+        reasons.append("Obligations survive termination")
+
+    # -----------------------------
+    # 🔴 INJUNCTIVE RELIEF (🔥 NEW - VERY IMPORTANT)
+    # -----------------------------
+    if "injunctive relief" in text or "irreparable harm" in text:
+        score += 2
+        reasons.append("Injunctive relief clause")
+
+    # -----------------------------
+    # 🔴 ONE-SIDED (IMPROVED)
+    # -----------------------------
+    if (
+        "receiving party shall" in text and
+        "disclosing party shall" not in text
+    ):
         score += 2
         reasons.append("One-sided obligation")
 
+    # broader detection
+    if "shall" in text and "other party shall" not in text:
+        score += 1
+
     if "sole discretion" in text:
         score += 2
-        reasons.append("Unilateral decision power")
+        reasons.append("Unilateral control")
 
-    # --------------------------------------------------
-    # 🔴 INTELLECTUAL PROPERTY RISKS
-    # --------------------------------------------------
+    # -----------------------------
+    # 🔴 IP
+    # -----------------------------
     if "transfer of ownership" in text:
         score += 3
-        reasons.append("Potential IP ownership transfer")
+        reasons.append("Ownership transfer")
 
     if "royalty-free" in text and "irrevocable" in text:
         score += 3
-        reasons.append("Irrevocable royalty-free license")
+        reasons.append("Irrevocable license")
 
-    # --------------------------------------------------
-    # 🔴 FORCE MAJEURE RISKS
-    # --------------------------------------------------
+    # -----------------------------
+    # 🔴 FORCE MAJEURE
+    # -----------------------------
     if clause_type == "Force Majeure":
-        if "pandemic" not in text and "government" not in text:
+        if "pandemic" not in text:
             score += 1
-            reasons.append("Force majeure scope may be limited")
+            reasons.append("Limited force majeure scope")
 
-    # --------------------------------------------------
-    # 🧠 FINAL RISK LEVEL
-    # --------------------------------------------------
-    if score >= 5:
+    # -----------------------------
+    # 🧠 FINAL THRESHOLDS
+    # -----------------------------
+    if score >= 6:
         level = "HIGH"
     elif score >= 3:
         level = "MEDIUM"
     else:
         level = "LOW"
 
-    # --------------------------------------------------
-    # 🧾 DEFAULT SAFE MESSAGE
-    # --------------------------------------------------
     if not reasons:
-        reasons.append("No unusual or risky patterns detected")
+        reasons.append("Standard clause")
 
     return {
         "level": level,

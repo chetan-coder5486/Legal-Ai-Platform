@@ -41,8 +41,6 @@ _HEADING_RE = re.compile(
         (?:article|section|clause|schedule|exhibit|annex|recital|part)
             \s+[\w.]+
       | \d+(?:\.\d+)*\.?\s
-      | \([a-z]\)\s
-      | \([ivxlc]+\)\s
       | [A-Z][A-Z\s]{4,}$
     )
     """,
@@ -72,8 +70,18 @@ def segment_clauses(text: str) -> list:
 
     merged = []
     for clause in raw_clauses:
-        if merged and len(clause) < _MIN_CLAUSE_LENGTH:
-            merged[-1] = merged[-1] + "\n\n" + clause
+        clause = clause.strip()
+
+        if not clause:
+            continue
+
+        # 🔥 smarter merge
+        if merged and (
+            len(clause) < _MIN_CLAUSE_LENGTH or
+            clause[0].islower() or
+            clause.startswith(("of ", "and ", "or ", "to ", "in "))
+        ):
+            merged[-1] += " " + clause
         else:
             merged.append(clause)
 
