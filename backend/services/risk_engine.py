@@ -1,80 +1,137 @@
+import re
+
+
 def assess_risk(clause_text: str, clause_type: str) -> dict:
-    clause_lower = clause_text.lower()
-    level = "LOW"
-    reason = "Standard NDA language detected."
+    """
+    Advanced rule-based risk engine with scoring + multi-signal detection.
 
-    if "definition of confidential" in clause_type.lower():
-        if "oral" in clause_lower or "verbal" in clause_lower:
-            level = "MEDIUM"
-            reason = "Includes oral disclosures — harder to track and prove."
-        elif "all information" in clause_lower or "any information" in clause_lower:
-            level = "MEDIUM"
-            reason = "Overly broad definition — may capture unintended information."
+    Features:
+    - Scoring-based risk classification (LOW / MEDIUM / HIGH)
+    - Detects multiple risk signals in a single clause
+    - Works even if classification is slightly wrong
+    - Produces meaningful explanations
+    """
 
-    elif "obligations of confidentiality" in clause_type.lower():
-        if "perpetual" in clause_lower or "indefinitely" in clause_lower:
-            level = "HIGH"
-            reason = "Perpetual confidentiality obligation — no expiry defined."
-        elif "reasonable" in clause_lower:
-            level = "LOW"
-            reason = "Standard reasonable care obligation."
-        else:
-            level = "MEDIUM"
-            reason = "Obligation scope unclear — check duration and standard of care."
+    text = clause_text.lower()
+    score = 0
+    reasons = []
 
-    elif "permitted disclosures" in clause_type.lower():
-        if "prior written consent" in clause_lower:
-            level = "LOW"
-            reason = "Disclosure requires prior written consent — well controlled."
-        elif "at its discretion" in clause_lower or "sole discretion" in clause_lower:
-            level = "HIGH"
-            reason = "One party has sole discretion to disclose — high risk."
+    # --------------------------------------------------
+    # 🔴 LIABILITY RISKS
+    # --------------------------------------------------
+    if "unlimited liability" in text or "without limit" in text:
+        score += 5
+        reasons.append("Unlimited liability exposure")
 
-    elif "term and duration" in clause_type.lower():
-        if not any(w in clause_lower for w in ["year", "month", "date", "term"]):
-            level = "HIGH"
-            reason = "No clear duration specified — agreement may be open-ended."
-        elif "2 year" in clause_lower or "two year" in clause_lower:
-            level = "LOW"
-            reason = "Standard 2-year term detected."
+    if "indirect damages" in text and "exclude" not in text:
+        score += 3
+        reasons.append("Indirect damages not excluded")
 
-    elif "termination" in clause_type.lower():
-        if "immediate" in clause_lower and "without" in clause_lower:
-            level = "HIGH"
-            reason = "Allows immediate termination without notice or cause."
-        elif "notice" in clause_lower or "cure" in clause_lower:
-            level = "LOW"
-            reason = "Standard termination with notice period."
+    if "consequential damages" in text and "exclude" not in text:
+        score += 3
+        reasons.append("Consequential damages not excluded")
 
-    elif "return or destruction" in clause_type.lower():
-        if "destroy" not in clause_lower and "return" not in clause_lower:
-            level = "MEDIUM"
-            reason = "No explicit return or destruction obligation found."
-        else:
-            level = "LOW"
-            reason = "Return/destruction of confidential materials addressed."
+    if "cap" in text or "limited to" in text:
+        score -= 1  # reduces risk slightly
 
-    elif "governing law" in clause_type.lower():
-        if not any(w in clause_lower for w in ["england", "wales", "scotland",
-                                                 "delaware", "california",
-                                                 "new york", "india"]):
-            level = "MEDIUM"
-            reason = "Jurisdiction is unusual or unclear — verify with counsel."
+    # --------------------------------------------------
+    # 🔴 TERMINATION RISKS
+    # --------------------------------------------------
+    if "without cause" in text:
+        score += 4
+        reasons.append("Termination allowed without cause")
 
-    elif "remedies" in clause_type.lower():
-        if "injunctive" in clause_lower or "equitable" in clause_lower:
-            level = "LOW"
-            reason = "Standard injunctive relief provision."
-        elif "unlimited" in clause_lower:
-            level = "HIGH"
-            reason = "Unlimited remedies clause — significant financial exposure."
+    if "immediate termination" in text:
+        score += 3
+        reasons.append("Immediate termination clause")
 
-    elif "intellectual property" in clause_type.lower():
-        if "assign" in clause_lower or "transfer" in clause_lower:
-            level = "HIGH"
-            reason = "IP assignment detected — ownership may transfer to other party."
-        elif "license" in clause_lower:
-            level = "MEDIUM"
-            reason = "License grant found — review scope and exclusivity."
+    if "notice" not in text and clause_type == "Termination":
+        score += 2
+        reasons.append("No notice period defined")
 
-    return {"level": level, "reason": reason}
+    if "cure period" in text:
+        score -= 1  # safer clause
+
+    # --------------------------------------------------
+    # 🔴 CONFIDENTIALITY RISKS
+    # --------------------------------------------------
+    year_match = re.search(r'(\d+)\s+year', text)
+    if year_match:
+        years = int(year_match.group(1))
+        if years >= 5:
+            score += 2
+            reasons.append(f"Long confidentiality duration ({years} years)")
+
+    if "perpetual" in text:
+        score += 3
+        reasons.append("Perpetual confidentiality obligation")
+
+    # --------------------------------------------------
+    # 🔴 PAYMENT RISKS
+    # --------------------------------------------------
+    if "late fee" not in text and clause_type == "Payment":
+        score += 2
+        reasons.append("No late fee protection")
+
+    if "non-refundable" in text:
+        score += 2
+        reasons.append("Non-refundable payment terms")
+
+    # --------------------------------------------------
+    # 🔴 GOVERNING LAW RISKS
+    # --------------------------------------------------
+    if clause_type == "Governing Law":
+        if not any(j in text for j in ["india", "delaware", "california", "new york"]):
+            score += 2
+            reasons.append("Unfamiliar or foreign jurisdiction")
+
+    # --------------------------------------------------
+    # 🔴 ONE-SIDED CLAUSE DETECTION
+    # --------------------------------------------------
+    if "receiving party shall" in text and "disclosing party shall" not in text:
+        score += 2
+        reasons.append("One-sided obligation")
+
+    if "sole discretion" in text:
+        score += 2
+        reasons.append("Unilateral decision power")
+
+    # --------------------------------------------------
+    # 🔴 INTELLECTUAL PROPERTY RISKS
+    # --------------------------------------------------
+    if "transfer of ownership" in text:
+        score += 3
+        reasons.append("Potential IP ownership transfer")
+
+    if "royalty-free" in text and "irrevocable" in text:
+        score += 3
+        reasons.append("Irrevocable royalty-free license")
+
+    # --------------------------------------------------
+    # 🔴 FORCE MAJEURE RISKS
+    # --------------------------------------------------
+    if clause_type == "Force Majeure":
+        if "pandemic" not in text and "government" not in text:
+            score += 1
+            reasons.append("Force majeure scope may be limited")
+
+    # --------------------------------------------------
+    # 🧠 FINAL RISK LEVEL
+    # --------------------------------------------------
+    if score >= 5:
+        level = "HIGH"
+    elif score >= 3:
+        level = "MEDIUM"
+    else:
+        level = "LOW"
+
+    # --------------------------------------------------
+    # 🧾 DEFAULT SAFE MESSAGE
+    # --------------------------------------------------
+    if not reasons:
+        reasons.append("No unusual or risky patterns detected")
+
+    return {
+        "level": level,
+        "reason": "; ".join(reasons)
+    }

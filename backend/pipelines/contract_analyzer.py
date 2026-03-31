@@ -1,5 +1,5 @@
 import re
-from transformers import pipeline as hf_pipeline
+from sentence_transformers import SentenceTransformer, util
 from backend.services.risk_engine import assess_risk
 
 model = None
@@ -96,7 +96,6 @@ def segment_clauses(text: str) -> list:
             continue
 
         # Skip preamble / recitals / signature blocks
-        # Strip leading punctuation/quotes before matching
         first_line = chunk.split("\n")[0].strip().lower()
         first_line_clean = first_line.lstrip('"\'(–—- ')
         if SKIP_PATTERNS.match(first_line_clean):
@@ -149,9 +148,9 @@ def run_contract_analysis(text: str) -> dict:
             top_label, confidence = classify_clause(clause)
 
             try:
-                risk_assessment = assess_risk(clause, top_label)
+                risk = assess_risk(clause, top_label)
             except Exception:
-                risk_assessment = {
+                risk = {
                     "level": "UNKNOWN",
                     "reason": "Risk engine failed"
                 }
@@ -160,8 +159,8 @@ def run_contract_analysis(text: str) -> dict:
                 "clause_text": clause,
                 "type": top_label,
                 "confidence": round(confidence, 3),
-                "risk_level": risk_assessment["level"],
-                "risk_reason": risk_assessment["reason"]
+                "risk_level": risk["level"],
+                "risk_reason": risk["reason"]
             })
 
         except Exception as e:
