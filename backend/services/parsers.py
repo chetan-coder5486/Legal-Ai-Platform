@@ -1,4 +1,5 @@
 import io
+import os
 import re
 import fitz        # PyMuPDF
 import pdfplumber
@@ -6,12 +7,23 @@ import docx
 
 # ─── Optional OCR (only needed for scanned PDFs) ───────────────────────────
 
-import pytesseract
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+try:
+    import pytesseract
+    # Use env var if set, otherwise try common install paths
+    tesseract_path = os.getenv("TESSERACT_CMD")
+    if tesseract_path:
+        pytesseract.pytesseract.tesseract_cmd = tesseract_path
+    elif os.name == 'nt':  # Windows
+        default_win = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+        if os.path.exists(default_win):
+            pytesseract.pytesseract.tesseract_cmd = default_win
+    # On Linux/macOS, tesseract is usually on PATH already
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
 
 try:
     from PIL import Image
-    OCR_AVAILABLE = True
 except ImportError:
     OCR_AVAILABLE = False
 
@@ -88,7 +100,7 @@ def _extract_with_ocr(file_bytes: bytes) -> str:
     Requires: pip install pytesseract pillow
     """
     if not OCR_AVAILABLE:
-        print("[parsers] OCR unavailable — install pytesseract and Pillow.")
+        print("[parsers] OCR unavailable — install pytesseract and Pillow, or set TESSERACT_CMD env var.")
         return ""
 
     pages_text = []

@@ -37,14 +37,15 @@ async def upload_document(
                 "error": str(e)
             }
 
-        # 4️⃣ Return response
+        # 4️⃣ Return response (don't send full parsed text — can be huge)
         return {
             "status": "success",
-            "parsed": text,
             "filename": file.filename,
             "task": task_type,
             "results": result
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

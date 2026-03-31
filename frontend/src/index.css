@@ -38,7 +38,7 @@ body {
 }
 
 .app-container {
-  max-w-px: 1200px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
   display: flex;
@@ -58,6 +58,7 @@ header h1 {
   font-weight: 800;
   background: linear-gradient(90deg, #58a6ff, #a371f7);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 0.5rem;
 }
@@ -139,6 +140,24 @@ header p {
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
   margin-top: 2rem;
+}
+
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-grid .metric-card[style*="grid-column: span 2"] {
+    grid-column: span 1;
+  }
+
+  header h1 {
+    font-size: 2rem;
+  }
+
+  .glass-panel {
+    padding: 1.2rem;
+  }
 }
 
 .metric-card {

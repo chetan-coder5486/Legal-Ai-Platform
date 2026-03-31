@@ -60,7 +60,7 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
 
     try {
       // Connect to local FastAPI backend
-      const response = await axios.post('http://localhost:8000/api/upload', formData, {
+      const response = await axios.post('/api/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

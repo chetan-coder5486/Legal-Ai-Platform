@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 import chromadb
@@ -7,7 +8,7 @@ import chromadb
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./legal_ai.db")
 
 engine = create_engine(
-    DATABASE_URL, 
+    DATABASE_URL,
     connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -21,6 +22,10 @@ def get_db():
     finally:
         db.close()
 
-# ChromaDB Vector Store config
-chroma_client = chromadb.PersistentClient(path="./chroma_db")
+# ChromaDB Vector Store config — use absolute path so it works regardless of cwd
+CHROMA_DB_PATH = os.getenv(
+    "CHROMA_DB_PATH",
+    str(Path(__file__).resolve().parent.parent / "chroma_db")
+)
+chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
 vector_collection = chroma_client.get_or_create_collection(name="legal_cases")
