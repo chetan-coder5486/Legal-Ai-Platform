@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import './index.css';
-import UploadForm from './components/UploadForm';
-import Dashboard from './components/Dashboard';
+import UploadForm from './components/UploadForm.next.jsx';
+import Dashboard from './components/Dashboard.compact.jsx';
 
 function App() {
   const [reportData, setReportData] = useState(null);
