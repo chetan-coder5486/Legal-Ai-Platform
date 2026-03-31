@@ -116,24 +116,22 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
 # ─── Text cleaning ─────────────────────────────────────────────────────────
 
 def clean_text(text: str) -> str:
-    """
-    Clean extracted text while PRESERVING paragraph / clause boundaries.
-
-    Key fix vs original: we no longer collapse all whitespace into one line.
-    The clause segmenter downstream depends on double-newlines to find
-    paragraph breaks.
-    """
-    # Normalise Windows-style line endings
     text = text.replace("\r\n", "\n").replace("\r", "\n")
 
-    # Collapse 3+ consecutive blank lines into exactly 2
+    # 🔥 CRITICAL: join broken sentences
+    text = re.sub(r"\n(?=[a-z])", " ", text)
+
+    # 🔥 fix broken uppercase headings
+    text = re.sub(r"([A-Z])\n([A-Z])", r"\1 \2", text)
+
+    # preserve paragraph breaks
     text = re.sub(r"\n{3,}", "\n\n", text)
 
-    # Remove non-printable characters (but keep standard whitespace)
-    text = re.sub(r"[^\S\n]+", " ", text)       # collapse spaces/tabs on a line
-    text = re.sub(r" *\n *", "\n", text)         # trim spaces around line breaks
+    # spacing cleanup
+    text = re.sub(r"[^\S\n]+", " ", text)
+    text = re.sub(r" *\n *", "\n", text)
 
-    # Remove page-number artifacts like "- 3 -" or "Page 3 of 10"
+    # remove page artifacts
     text = re.sub(r"(?i)(page\s+\d+\s+of\s+\d+|\-\s*\d+\s*\-)", "", text)
 
     return text.strip()
