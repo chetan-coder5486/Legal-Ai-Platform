@@ -19,10 +19,9 @@ def generate_report(text: str, task_type: str) -> dict:
         # Run base analysis
         analysis = run_contract_analysis(text)
         
-        # Pass each clause through explainability layer
+      
+        
         analyzed_clauses = analysis.get("analyzed_clauses", [])
-        for i, clause in enumerate(analyzed_clauses):
-            analyzed_clauses[i] = generate_explanation(clause)
             
         report["contract_analysis"] = analysis
         
