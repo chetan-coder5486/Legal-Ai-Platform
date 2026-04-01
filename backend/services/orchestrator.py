@@ -3,19 +3,17 @@ def generate_report(text: str, task_type: str) -> dict:
     Orchestrator that routes the parsed document text to the appropriate AI pipeline
     and generates a final report.
     """
-    from backend.pipelines.summarizer import run_summarization
-    from backend.pipelines.contract_analyzer import run_contract_analysis
-    from backend.services.explainability import generate_explanation
-    
     report = {
         "task_type": task_type,
         "metadata": {"doc_length_chars": len(text)}
     }
     
     if task_type == "summarize_case":
+        from backend.pipelines.summarizer import run_summarization
         report["summary_data"] = run_summarization(text)
         
     elif task_type == "analyze_contract":
+        from backend.pipelines.contract_analyzer import run_contract_analysis
         # Run base analysis
         analysis = run_contract_analysis(text)
         
@@ -26,6 +24,7 @@ def generate_report(text: str, task_type: str) -> dict:
         report["contract_analysis"] = analysis
         
     elif task_type == "deep_research":
+        from backend.services.explainability import generate_explanation
         # Use existing explanation block on the whole text if it's a clause
         report["research_data"] = generate_explanation({
             "clause_text": text,

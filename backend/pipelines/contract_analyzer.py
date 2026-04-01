@@ -2,16 +2,19 @@ import re
 
 try:
     from sentence_transformers import SentenceTransformer, util
-except ImportError:
+    _ST_IMPORT_ERROR = None
+except Exception as e:
+    # Handles locked-down environments where torch DLL loading is blocked.
     SentenceTransformer = None
     util = None
+    _ST_IMPORT_ERROR = e
+
 from backend.services.risk_engine import assess_risk
 
 model = None
 label_embeddings = None
 model_load_failed = False
 
-# ─── NDA-Specific Labels ───────────────────────────────────────────────────
 labels = [
     "Definition of confidential information clause",
     "Obligations of confidentiality and non-disclosure clause",
@@ -49,27 +52,25 @@ RULE_LABELS = [
     ("Limitation of liability clause", [r"\blimitation of liability\b", r"\bliability\b.{0,30}\bunlimited\b", r"\bwithout financial cap\b", r"\bwithout any cap\b"]),
 ]
 
-# ─── Patterns that identify NON-clause content to skip ────────────────────
 SKIP_PATTERNS = re.compile(
     r"^("
-    r"this\s+(confidentiality|non.disclosure|nda|agreement)\s+"  # preamble
-    r"|this\s+agreement\s+is\s+made"                             # opening line
-    r"|between\s+.{0,80}(party|parties)"                        # party intro
-    r"|hereinafter\s+referred"                                   # party description
-    r"|whereas"                                                  # recital opener
-    r"|now[\s,]+therefore"                                       # recital closer
-    r"|in\s+witness\s+whereof"                                   # signature block
-    r"|signed\s+by|executed\s+by|authorized\s+signatory"        # signature
-    r"|name\s*:|title\s*:|date\s*:|signature\s*:"               # signature fields
-    r"|note\s*:"                                                  # notes like (Note: To be signed...)
-    r"|\(note"                                                    # (Note: ...)
-    r"|to\s+be\s+duly\s+signed"                                  # signature instructions
-    r"|key\s+managerial"                                         # KMP references
+    r"this\s+(confidentiality|non.disclosure|nda|agreement)\s+"
+    r"|this\s+agreement\s+is\s+made"
+    r"|between\s+.{0,80}(party|parties)"
+    r"|hereinafter\s+referred"
+    r"|whereas"
+    r"|now[\s,]+therefore"
+    r"|in\s+witness\s+whereof"
+    r"|signed\s+by|executed\s+by|authorized\s+signatory"
+    r"|name\s*:|title\s*:|date\s*:|signature\s*:"
+    r"|note\s*:"
+    r"|\(note"
+    r"|to\s+be\s+duly\s+signed"
+    r"|key\s+managerial"
     r")",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 
-# Lettered recitals like "A. Company is engaged..." — background facts not clauses
 RECITAL_PATTERN = re.compile(r"^[A-E]\.\s+\S", re.MULTILINE)
 
 
@@ -77,19 +78,25 @@ def get_model():
     global model, label_embeddings, model_load_failed
     if model_load_failed:
         return None
+
     if SentenceTransformer is None or util is None:
         model_load_failed = True
-        print("[classifier] sentence_transformers not installed, falling back to rule-based classifier.")
+        if _ST_IMPORT_ERROR is not None:
+            print(f"[classifier] sentence_transformers unavailable ({_ST_IMPORT_ERROR}), falling back to rule-based classifier.")
+        else:
+            print("[classifier] sentence_transformers not installed, falling back to rule-based classifier.")
         return None
+
     if model is None:
         try:
             print("[classifier] Loading Sentence Transformer model...")
-            model = SentenceTransformer('all-MiniLM-L6-v2')
+            model = SentenceTransformer("all-MiniLM-L6-v2")
             label_embeddings = model.encode(labels, convert_to_tensor=True)
         except Exception as e:
             model_load_failed = True
             print(f"[classifier] Transformer model unavailable, falling back to rule-based classifier: {e}")
             return None
+
     return model
 
 
@@ -114,73 +121,74 @@ def _classify_clause_by_rules(clause: str):
     return "Unclassified clause", 0.2
 
 
-# ─── Clause Segmentation ───────────────────────────────────────────────────
-
 def segment_clauses(text: str) -> list:
     """
     NDA-aware segmenter that:
     - Splits on numbered clauses (1. / 1.1 / 1.1.1)
     - Splits on ALL CAPS headings
-    - Skips preamble, recitals, party descriptions, signature blocks
-    - Skips lettered background recitals (A. B. C. D.)
+    - Skips obvious non-clause metadata blocks
+    - Falls back to paragraph segmentation when structure is weak
     """
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = re.sub(r"(?i)page\s+\d+\s+of\s+\d+", "", text)
     text = re.sub(r"\-\s*\d+\s*\-", "", text)
 
-    # Split into chunks on numbered clause boundaries
     split_pattern = re.compile(
         r"\n\s*(?="
-        r"(?:\d+[\.\)]\d*[\.\)]?\s)"        # 1. or 1.1 or 1.1.1
-        r"|(?:[A-Z][A-Z\s\-]{4,}\n)"        # ALL CAPS HEADING on its own line
+        r"(?:\d+[\.\)]\d*[\.\)]?\s)"
+        r"|(?:[A-Z][A-Z\s\-]{4,}\n)"
         r")"
     )
 
     raw_chunks = split_pattern.split(text)
 
-    # Also split on double newlines within chunks
     all_chunks = []
     for chunk in raw_chunks:
-        parts = re.split(r"\n{2,}", chunk)
-        all_chunks.extend(parts)
+        all_chunks.extend(re.split(r"\n{2,}", chunk))
+
+    if len(all_chunks) <= 1:
+        all_chunks = re.split(r"\n{2,}", text)
 
     cleaned = []
     for chunk in all_chunks:
         chunk = chunk.strip()
-
-        # Too short to be a real clause
-        if len(chunk) < 60:
+        if len(chunk) < 40:
             continue
 
-        # Skip preamble / recitals / signature blocks
         first_line = chunk.split("\n")[0].strip().lower()
         lower_chunk = chunk.lower()
-        first_line_clean = first_line.lstrip('"\'(–—- ')
-        if first_line_clean.endswith("agreement") and ("made and entered into" in lower_chunk or "by and between" in lower_chunk):
+        first_line_clean = first_line.lstrip("\"'(- ")
+
+        # Skip only short opening blocks, not the whole contract body.
+        if (
+            first_line_clean.endswith("agreement")
+            and ("made and entered into" in lower_chunk or "by and between" in lower_chunk)
+            and len(chunk) < 420
+        ):
             continue
+
         if SKIP_PATTERNS.match(first_line_clean):
             continue
 
-        # Skip lettered recitals (A. B. C. short background facts)
         if RECITAL_PATTERN.match(chunk) and len(chunk) < 400:
             continue
 
-        # Skip if overwhelmingly uppercase (title page / cover)
         upper_ratio = sum(1 for c in chunk if c.isupper()) / max(len(chunk), 1)
         if upper_ratio > 0.55 and len(chunk) < 300:
             continue
 
-        # Skip blank-field-only lines (e.g. "______ a company incorporated...")
         blank_ratio = chunk.count("_") / max(len(chunk), 1)
         if blank_ratio > 0.15:
             continue
 
         cleaned.append(chunk)
 
+    # Never return empty for long parseable text.
+    if not cleaned and len(text.strip()) >= 220:
+        cleaned = [p.strip() for p in re.split(r"\n{2,}", text) if len(p.strip()) >= 40][:40]
+
     return cleaned
 
-
-# ─── Clause Classification ─────────────────────────────────────────────────
 
 def classify_clause(clause: str):
     rule_label, rule_confidence = _classify_clause_by_rules(clause)
@@ -208,8 +216,6 @@ def classify_clause(clause: str):
         print(f"[classifier] Embedding classification failed, using rules: {e}")
         return rule_label, rule_confidence
 
-
-# ─── Main Pipeline ─────────────────────────────────────────────────────────
 
 def run_contract_analysis(text: str) -> dict:
     clauses = segment_clauses(text)
@@ -247,11 +253,9 @@ def run_contract_analysis(text: str) -> dict:
                 "positive_signals": risk.get("positive_signals", []),
                 "recommendations": risk.get("recommendations", []),
             })
-
         except Exception as e:
             print(f"[contract_analyzer] Error processing clause: {e}")
 
-    # Overall risk summary
     high = sum(1 for c in analyzed_clauses if c["risk_level"] == "HIGH")
     medium = sum(1 for c in analyzed_clauses if c["risk_level"] == "MEDIUM")
     low = sum(1 for c in analyzed_clauses if c["risk_level"] == "LOW")
@@ -272,5 +276,5 @@ def run_contract_analysis(text: str) -> dict:
             "LOW": low,
             "top_recommendations": top_recommendations[:8],
         },
-        "analyzed_clauses": analyzed_clauses
+        "analyzed_clauses": analyzed_clauses,
     }
