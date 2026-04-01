@@ -7,6 +7,7 @@ function App() {
   const [reportData, setReportData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const isLandingState = !reportData && !isLoading;
 
   const handleUploadComplete = (data) => {
     setReportData(data);
@@ -30,10 +31,10 @@ function App() {
   };
 
   return (
-    <div className="app-container">
+    <div className={`app-container${isLandingState ? ' landing-mode' : ''}`}>
       <header>
         <h1>Legal AI Platform</h1>
-        <p>Intelligent Contract Analysis & Precedent Research</p>
+        <p>Upload a legal document and get a clear AI review instantly.</p>
       </header>
 
       <main>
