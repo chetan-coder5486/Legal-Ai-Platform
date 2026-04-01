@@ -65,6 +65,17 @@ class ContractPipelineTests(unittest.TestCase):
         self.assertEqual(result["level"], "MEDIUM")
         self.assertIn("Injunctive relief clause", result["reason"])
 
+    def test_segmenter_does_not_drop_unnumbered_contract_body(self):
+        text = (
+            "EMPLOYMENT AGREEMENT\\n"
+            "This Employment Agreement is made and entered into by and between Employer and Employee.\\n\\n"
+            "The Employer may terminate the Employee without cause and without notice. "
+            "Compensation shall be payable monthly. This agreement is governed by the laws of California."
+        )
+        clauses = contract_analyzer.segment_clauses(text)
+
+        self.assertGreaterEqual(len(clauses), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

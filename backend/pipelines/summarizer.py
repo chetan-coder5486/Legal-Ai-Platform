@@ -1,6 +1,12 @@
-from transformers import pipeline
 import textwrap
 import re
+
+try:
+    from transformers import pipeline as hf_pipeline
+    _TRANSFORMERS_IMPORT_ERROR = None
+except Exception as e:
+    hf_pipeline = None
+    _TRANSFORMERS_IMPORT_ERROR = e
 
 # Lazy-load to prevent slow startup time unless necessary
 summarizer = None
@@ -8,9 +14,12 @@ summarizer = None
 def get_summarizer():
     global summarizer
     if summarizer is None:
+        if hf_pipeline is None:
+            print(f"Model loading failed: transformers unavailable ({_TRANSFORMERS_IMPORT_ERROR})")
+            return None
         try:
             print("Loading summarization model...")
-            summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+            summarizer = hf_pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
         except Exception as e:
             print("Model loading failed:", e)
             summarizer = None
