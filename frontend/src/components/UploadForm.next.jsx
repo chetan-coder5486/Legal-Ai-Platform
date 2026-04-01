@@ -72,7 +72,12 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
   };
 
   const handleFileSelection = (selectedFile) => {
-    const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+    const validTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain'
+    ];
+
     const validExtension =
       selectedFile.name.endsWith('.pdf') ||
       selectedFile.name.endsWith('.docx') ||
@@ -90,25 +95,49 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
     inputRef.current?.click();
   };
 
+  // ✅ UPDATED FUNCTION (IMPORTANT FIX HERE)
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!file) return;
 
     onUploadStart();
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('task_type', taskType);
 
     try {
-      const response = await axios.post('http://localhost:8000/api/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      onUploadComplete(response.data);
+      const response = await axios.post(
+        'http://localhost:8000/api/upload',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      const data = response.data;
+
+      // 🔥 Normalize response for frontend
+      if (taskType === "summarize_case") {
+        onUploadComplete({
+          type: "summary",
+          content: data.results?.summary_data?.final_summary || "No summary generated"
+        });
+      } else {
+        onUploadComplete({
+          type: "contract",
+          content: data.results
+        });
+      }
+
     } catch (err) {
       console.error('Upload error:', err);
-      onError(err.response?.data?.detail || 'Failed to process document. Is the backend running?');
+      onError(
+        err.response?.data?.detail ||
+        'Failed to process document. Is the backend running?'
+      );
     }
   };
 
@@ -213,7 +242,9 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
               <>
                 <UploadCloud className="upload-icon" />
                 <h3>Drop your legal document here</h3>
-                <p style={{ color: 'var(--text-secondary)' }}>or click to browse from your computer</p>
+                <p style={{ color: 'var(--text-secondary)' }}>
+                  or click to browse from your computer
+                </p>
                 <div className="upload-support-row">
                   <span>PDF</span>
                   <span>DOCX</span>
@@ -238,7 +269,7 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
               <strong>What happens next</strong>
               <span>
                 {taskType === 'summarize_case'
-                  ? 'The system will parse the document and generate a concise summary.'
+                  ? 'The system will generate an AI-powered summary with fallback support if needed.'
                   : 'The system will segment clauses, classify them, run the risk engine, and build a report.'}
               </span>
             </div>

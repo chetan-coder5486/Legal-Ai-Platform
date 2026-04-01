@@ -193,7 +193,15 @@ const ClauseCard = ({ clause, idx }) => {
 
 const Dashboard = ({ data }) => {
   const [riskFilter, setRiskFilter] = useState('ALL');
-  const { results, task } = data;
+  
+  let results = data.results;
+  let task = data.task;
+
+  if (data.type === "contract") {
+  results = data.content;
+  task = "analyze_contract";
+  }
+
   const isContractAnalysis = task === 'analyze_contract';
   const isSummary = task === 'summarize_case';
   const analysisPayload = results.contract_analysis || {};
@@ -218,7 +226,7 @@ const Dashboard = ({ data }) => {
       <div className="report-hero glass-panel compact-hero">
         <div className="report-hero-copy">
           <div className="hero-kicker">Contract intelligence report</div>
-          <h2>Analysis Report: {data.filename}</h2>
+          <h2>Analysis Report: {data.filename || "Uploaded Document"}</h2>
           <p>Compact review with confidence, negotiation priorities, and optional clause-level detail.</p>
         </div>
         <div className="hero-meta compact">
