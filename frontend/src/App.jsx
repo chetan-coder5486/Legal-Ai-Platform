@@ -62,19 +62,32 @@ function App() {
             <div className="loader" style={{ width: '48px', height: '48px', marginBottom: '1rem' }}></div>
             <h2>Processing Document...</h2>
             <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-              Our AI pipelines are extracting text, classifying clauses, and running the risk engine. This may take a moment.
+              Our AI pipelines are processing your document. This may take a moment.
             </p>
           </div>
         )}
 
         {reportData && !isLoading && (
           <div className="animate-slide-up">
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
               <button className="btn-primary" onClick={resetUpload}>
                 Analyze Another Document
               </button>
             </div>
-            <Dashboard data={reportData} />
+
+            {/* 🔥 CONDITIONAL RENDERING */}
+            {reportData.type === "summary" ? (
+              <div className="glass-panel" style={{ padding: '2rem' }}>
+                <h2 style={{ marginBottom: '1rem' }}>📄 Document Summary</h2>
+                <p style={{ whiteSpace: 'pre-line', lineHeight: '1.6' }}>
+                  {reportData.content}
+                </p>
+              </div>
+            ) : (
+              <Dashboard data={reportData} />
+            )}
+
           </div>
         )}
       </main>
