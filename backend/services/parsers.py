@@ -1,17 +1,39 @@
 import io
 import re
-import fitz        # PyMuPDF
-import pdfplumber
-import docx
+import shutil
+from pathlib import Path
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    fitz = None
+
+try:
+    import pdfplumber
+except ImportError:
+    pdfplumber = None
+
+try:
+    import docx
+except ImportError:
+    docx = None
 
 # ─── Optional OCR (only needed for scanned PDFs) ───────────────────────────
 
-import pytesseract
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+try:
+    import pytesseract
+except ImportError:
+    pytesseract = None
+tesseract_path = shutil.which("tesseract") or r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+if pytesseract is not None:
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
 try:
     from PIL import Image
-    OCR_AVAILABLE = True
+    OCR_AVAILABLE = bool(
+        pytesseract is not None
+        and fitz is not None
+        and (shutil.which("tesseract") or Path(tesseract_path).exists())
+    )
 except ImportError:
     OCR_AVAILABLE = False
 
@@ -46,6 +68,8 @@ def _extract_with_pymupdf(file_bytes: bytes) -> str:
     Much better for legal documents than block-based extraction.
     """
     pages_text = []
+    if fitz is None:
+        return ""
     try:
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         for page in doc:
@@ -64,6 +88,8 @@ def _extract_with_pdfplumber(file_bytes: bytes) -> str:
     Falls back gracefully if a page fails.
     """
     pages_text = []
+    if pdfplumber is None:
+        return ""
     try:
         with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
             for page in pdf.pages:
@@ -108,6 +134,8 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
     Extract text from Word documents, preserving paragraph structure.
     Skips empty paragraphs to avoid blank-line noise.
     """
+    if docx is None:
+        raise ValueError("DOCX support is unavailable because python-docx is not installed.")
     doc = docx.Document(io.BytesIO(file_bytes))
     paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
     return "\n\n".join(paragraphs)
@@ -116,24 +144,22 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
 # ─── Text cleaning ─────────────────────────────────────────────────────────
 
 def clean_text(text: str) -> str:
-    """
-    Clean extracted text while PRESERVING paragraph / clause boundaries.
-
-    Key fix vs original: we no longer collapse all whitespace into one line.
-    The clause segmenter downstream depends on double-newlines to find
-    paragraph breaks.
-    """
-    # Normalise Windows-style line endings
     text = text.replace("\r\n", "\n").replace("\r", "\n")
 
-    # Collapse 3+ consecutive blank lines into exactly 2
+    # 🔥 CRITICAL: join broken sentences
+    text = re.sub(r"\n(?=[a-z])", " ", text)
+
+    # 🔥 fix broken uppercase headings
+    text = re.sub(r"([A-Z])\n([A-Z])", r"\1 \2", text)
+
+    # preserve paragraph breaks
     text = re.sub(r"\n{3,}", "\n\n", text)
 
-    # Remove non-printable characters (but keep standard whitespace)
-    text = re.sub(r"[^\S\n]+", " ", text)       # collapse spaces/tabs on a line
-    text = re.sub(r" *\n *", "\n", text)         # trim spaces around line breaks
+    # spacing cleanup
+    text = re.sub(r"[^\S\n]+", " ", text)
+    text = re.sub(r" *\n *", "\n", text)
 
-    # Remove page-number artifacts like "- 3 -" or "Page 3 of 10"
+    # remove page artifacts
     text = re.sub(r"(?i)(page\s+\d+\s+of\s+\d+|\-\s*\d+\s*\-)", "", text)
 
     return text.strip()

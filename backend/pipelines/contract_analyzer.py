@@ -1,11 +1,20 @@
 import re
-from sentence_transformers import SentenceTransformer, util
+
+try:
+    from sentence_transformers import SentenceTransformer, util
+    _ST_IMPORT_ERROR = None
+except Exception as e:
+    # Handles locked-down environments where torch DLL loading is blocked.
+    SentenceTransformer = None
+    util = None
+    _ST_IMPORT_ERROR = e
+
 from backend.services.risk_engine import assess_risk
 
 model = None
 label_embeddings = None
+model_load_failed = False
 
-# ─── NDA-Specific Labels ───────────────────────────────────────────────────
 labels = [
     "Definition of confidential information clause",
     "Obligations of confidentiality and non-disclosure clause",
@@ -24,119 +33,189 @@ labels = [
     "Parties and recitals clause",
 ]
 
-# ─── Patterns that identify NON-clause content to skip ────────────────────
+RULE_LABELS = [
+    ("Governing law and jurisdiction clause", [r"\bgoverned by\b", r"\bconstrued in accordance with\b", r"\bjurisdiction of\b", r"\bcourts?\b"]),
+    ("Termination of agreement clause", [r"\bterminate\b", r"\btermination\b", r"\bwithout cause\b", r"\bseverance\b", r"\bat-will\b"]),
+    ("Obligations of confidentiality and non-disclosure clause", [r"^\s*\d+\.\s*confidentiality\b", r"\bkeep confidential\b", r"\bconfidentiality\b", r"\btrade secrets\b", r"\bwill not disclose\b", r"\bproprietary information\b"]),
+    ("Base salary and payment clause", [r"\bsalary\b", r"\bpayable\b", r"\bpayment\b", r"\binstallments?\b", r"\blate fee\b"]),
+    ("Definition of confidential information clause", [r"\bfor the purposes of this agreement\b", r"\bconfidential information includes\b", r"\bmeans\b.{0,30}\bconfidential information\b"]),
+    ("Intellectual property ownership clause", [r"\bintellectual property\b", r"\bownership\b", r"\bcopyright\b", r"\blicen[cs]e\b"]),
+    ("Return or destruction of confidential information clause", [r"\breturn or destroy\b", r"\breturn\b.{0,40}\bconfidential\b", r"\bdestroy\b.{0,40}\bconfidential\b"]),
+    ("Permitted disclosures and exceptions clause", [r"\bpublic domain\b", r"\bindependently developed\b", r"\brequired by law\b", r"\bthird party\b.{0,40}\bwithout\b.{0,20}\brestriction\b"]),
+    ("Remedies and injunctive relief clause", [r"\binjunctive relief\b", r"\birreparable harm\b", r"\binterim relief\b"]),
+    ("Dispute resolution and arbitration clause", [r"\barbitration\b", r"\bdispute resolution\b", r"\bdisputes?\b"]),
+    ("Entire agreement and amendments clause", [r"\bentire agreement\b", r"\bamend(?:ed|ment)?\b", r"\bmodified only in writing\b"]),
+    ("Severability clause", [r"\bseverab(?:ility|le)\b", r"\binvalid provision\b"]),
+    ("Notices and communications clause", [r"\bnotices?\b", r"\bcommunications?\b", r"\bwritten notice\b"]),
+    ("No license or rights granted clause", [r"\bno licen[cs]e\b", r"\bno rights granted\b"]),
+    ("Term and duration of agreement clause", [r"\bfor a period of\b", r"\bthereafter\b", r"\bterm of employment\b", r"\byears?\b"]),
+    ("Limitation of liability clause", [r"\blimitation of liability\b", r"\bliability\b.{0,30}\bunlimited\b", r"\bwithout financial cap\b", r"\bwithout any cap\b"]),
+]
+
 SKIP_PATTERNS = re.compile(
     r"^("
-    r"this\s+(confidentiality|non.disclosure|nda|agreement)\s+"  # preamble
-    r"|this\s+agreement\s+is\s+made"                             # opening line
-    r"|between\s+.{0,80}(party|parties)"                        # party intro
-    r"|hereinafter\s+referred"                                   # party description
-    r"|whereas"                                                  # recital opener
-    r"|now[\s,]+therefore"                                       # recital closer
-    r"|in\s+witness\s+whereof"                                   # signature block
-    r"|signed\s+by|executed\s+by|authorized\s+signatory"        # signature
-    r"|name\s*:|title\s*:|date\s*:|signature\s*:"               # signature fields
-    r"|note\s*:"                                                  # notes like (Note: To be signed...)
-    r"|\(note"                                                    # (Note: ...)
-    r"|to\s+be\s+duly\s+signed"                                  # signature instructions
-    r"|key\s+managerial"                                         # KMP references
+    r"this\s+(confidentiality|non.disclosure|nda|agreement)\s+"
+    r"|this\s+agreement\s+is\s+made"
+    r"|between\s+.{0,80}(party|parties)"
+    r"|hereinafter\s+referred"
+    r"|whereas"
+    r"|now[\s,]+therefore"
+    r"|in\s+witness\s+whereof"
+    r"|signed\s+by|executed\s+by|authorized\s+signatory"
+    r"|name\s*:|title\s*:|date\s*:|signature\s*:"
+    r"|note\s*:"
+    r"|\(note"
+    r"|to\s+be\s+duly\s+signed"
+    r"|key\s+managerial"
     r")",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 
-# Lettered recitals like "A. Company is engaged..." — background facts not clauses
 RECITAL_PATTERN = re.compile(r"^[A-E]\.\s+\S", re.MULTILINE)
 
 
 def get_model():
-    global model, label_embeddings
+    global model, label_embeddings, model_load_failed
+    if model_load_failed:
+        return None
+
+    if SentenceTransformer is None or util is None:
+        model_load_failed = True
+        if _ST_IMPORT_ERROR is not None:
+            print(f"[classifier] sentence_transformers unavailable ({_ST_IMPORT_ERROR}), falling back to rule-based classifier.")
+        else:
+            print("[classifier] sentence_transformers not installed, falling back to rule-based classifier.")
+        return None
+
     if model is None:
-        print("[classifier] Loading Sentence Transformer model...")
-        model = SentenceTransformer('all-MiniLM-L6-v2')
-        label_embeddings = model.encode(labels, convert_to_tensor=True)
+        try:
+            print("[classifier] Loading Sentence Transformer model...")
+            model = SentenceTransformer("all-MiniLM-L6-v2")
+            label_embeddings = model.encode(labels, convert_to_tensor=True)
+        except Exception as e:
+            model_load_failed = True
+            print(f"[classifier] Transformer model unavailable, falling back to rule-based classifier: {e}")
+            return None
+
     return model
 
 
-# ─── Clause Segmentation ───────────────────────────────────────────────────
+def _classify_clause_by_rules(clause: str):
+    text = clause.lower()
+    best_label = None
+    best_hits = 0
+
+    for label, patterns in RULE_LABELS:
+        hits = sum(1 for pattern in patterns if re.search(pattern, text))
+        if hits > best_hits:
+            best_label = label
+            best_hits = hits
+
+    if best_label:
+        confidence = min(0.55 + (best_hits * 0.12), 0.9)
+        return best_label, confidence
+
+    if "confidential" in text or "non-disclosure" in text:
+        return "Obligations of confidentiality and non-disclosure clause", 0.45
+
+    return "Unclassified clause", 0.2
+
 
 def segment_clauses(text: str) -> list:
     """
     NDA-aware segmenter that:
     - Splits on numbered clauses (1. / 1.1 / 1.1.1)
     - Splits on ALL CAPS headings
-    - Skips preamble, recitals, party descriptions, signature blocks
-    - Skips lettered background recitals (A. B. C. D.)
+    - Skips obvious non-clause metadata blocks
+    - Falls back to paragraph segmentation when structure is weak
     """
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = re.sub(r"(?i)page\s+\d+\s+of\s+\d+", "", text)
     text = re.sub(r"\-\s*\d+\s*\-", "", text)
 
-    # Split into chunks on numbered clause boundaries
     split_pattern = re.compile(
         r"\n\s*(?="
-        r"(?:\d+[\.\)]\d*[\.\)]?\s)"        # 1. or 1.1 or 1.1.1
-        r"|(?:[A-Z][A-Z\s\-]{4,}\n)"        # ALL CAPS HEADING on its own line
+        r"(?:\d+[\.\)]\d*[\.\)]?\s)"
+        r"|(?:[A-Z][A-Z\s\-]{4,}\n)"
         r")"
     )
 
     raw_chunks = split_pattern.split(text)
 
-    # Also split on double newlines within chunks
     all_chunks = []
     for chunk in raw_chunks:
-        parts = re.split(r"\n{2,}", chunk)
-        all_chunks.extend(parts)
+        all_chunks.extend(re.split(r"\n{2,}", chunk))
+
+    if len(all_chunks) <= 1:
+        all_chunks = re.split(r"\n{2,}", text)
 
     cleaned = []
     for chunk in all_chunks:
         chunk = chunk.strip()
-
-        # Too short to be a real clause
-        if len(chunk) < 60:
+        if len(chunk) < 40:
             continue
 
-        # Skip preamble / recitals / signature blocks
         first_line = chunk.split("\n")[0].strip().lower()
-        first_line_clean = first_line.lstrip('"\'(–—- ')
+        lower_chunk = chunk.lower()
+        first_line_clean = first_line.lstrip("\"'(- ")
+
+        # Skip only short opening blocks, not the whole contract body.
+        if (
+            first_line_clean.endswith("agreement")
+            and ("made and entered into" in lower_chunk or "by and between" in lower_chunk)
+            and len(chunk) < 420
+        ):
+            continue
+
         if SKIP_PATTERNS.match(first_line_clean):
             continue
 
-        # Skip lettered recitals (A. B. C. short background facts)
         if RECITAL_PATTERN.match(chunk) and len(chunk) < 400:
             continue
 
-        # Skip if overwhelmingly uppercase (title page / cover)
         upper_ratio = sum(1 for c in chunk if c.isupper()) / max(len(chunk), 1)
         if upper_ratio > 0.55 and len(chunk) < 300:
             continue
 
-        # Skip blank-field-only lines (e.g. "______ a company incorporated...")
         blank_ratio = chunk.count("_") / max(len(chunk), 1)
         if blank_ratio > 0.15:
             continue
 
         cleaned.append(chunk)
 
+    # Never return empty for long parseable text.
+    if not cleaned and len(text.strip()) >= 220:
+        cleaned = [p.strip() for p in re.split(r"\n{2,}", text) if len(p.strip()) >= 40][:40]
+
     return cleaned
 
 
-# ─── Clause Classification ─────────────────────────────────────────────────
-
 def classify_clause(clause: str):
+    rule_label, rule_confidence = _classify_clause_by_rules(clause)
     mdl = get_model()
-    clause_input = clause[:600]
-    clause_emb = mdl.encode(clause_input, convert_to_tensor=True)
-    scores = util.cos_sim(clause_emb, label_embeddings)[0]
-    best_idx = scores.argmax().item()
-    confidence = float(scores[best_idx])
 
-    if confidence < 0.25:
-        return "Unclassified clause", confidence
+    if mdl is None:
+        return rule_label, rule_confidence
 
-    return labels[best_idx], confidence
+    try:
+        clause_input = clause[:600]
+        clause_emb = mdl.encode(clause_input, convert_to_tensor=True)
+        scores = util.cos_sim(clause_emb, label_embeddings)[0]
+        best_idx = scores.argmax().item()
+        confidence = float(scores[best_idx])
+        model_label = labels[best_idx]
 
+        if confidence < 0.25:
+            return rule_label, max(rule_confidence, confidence)
 
-# ─── Main Pipeline ─────────────────────────────────────────────────────────
+        if rule_label != "Unclassified clause" and rule_confidence >= 0.79:
+            return rule_label, max(rule_confidence, confidence)
+
+        return model_label, confidence
+    except Exception as e:
+        print(f"[classifier] Embedding classification failed, using rules: {e}")
+        return rule_label, rule_confidence
+
 
 def run_contract_analysis(text: str) -> dict:
     clauses = segment_clauses(text)
@@ -152,7 +231,13 @@ def run_contract_analysis(text: str) -> dict:
             except Exception:
                 risk = {
                     "level": "UNKNOWN",
-                    "reason": "Risk engine failed"
+                    "reason": "Risk engine failed",
+                    "score": 0,
+                    "category": "unknown",
+                    "summary": "Risk engine failed.",
+                    "matched_rules": [],
+                    "positive_signals": [],
+                    "recommendations": [],
                 }
 
             analyzed_clauses.append({
@@ -160,16 +245,26 @@ def run_contract_analysis(text: str) -> dict:
                 "type": top_label,
                 "confidence": round(confidence, 3),
                 "risk_level": risk["level"],
-                "risk_reason": risk["reason"]
+                "risk_reason": risk["reason"],
+                "risk_score": risk.get("score", 0),
+                "risk_category": risk.get("category", "unknown"),
+                "risk_summary": risk.get("summary", ""),
+                "matched_rules": risk.get("matched_rules", []),
+                "positive_signals": risk.get("positive_signals", []),
+                "recommendations": risk.get("recommendations", []),
             })
-
         except Exception as e:
             print(f"[contract_analyzer] Error processing clause: {e}")
 
-    # Overall risk summary
     high = sum(1 for c in analyzed_clauses if c["risk_level"] == "HIGH")
     medium = sum(1 for c in analyzed_clauses if c["risk_level"] == "MEDIUM")
     low = sum(1 for c in analyzed_clauses if c["risk_level"] == "LOW")
+    top_recommendations = []
+
+    for clause in analyzed_clauses:
+        for recommendation in clause.get("recommendations", []):
+            if recommendation not in top_recommendations:
+                top_recommendations.append(recommendation)
 
     return {
         "pipeline": "NDA Contract Analysis (Embedding-Based)",
@@ -178,7 +273,8 @@ def run_contract_analysis(text: str) -> dict:
         "risk_summary": {
             "HIGH": high,
             "MEDIUM": medium,
-            "LOW": low
+            "LOW": low,
+            "top_recommendations": top_recommendations[:8],
         },
-        "analyzed_clauses": analyzed_clauses
+        "analyzed_clauses": analyzed_clauses,
     }
