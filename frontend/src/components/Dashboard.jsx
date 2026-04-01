@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
-import { AlertTriangle, ShieldCheck, FileText, CheckCircle2, Loader2, ChevronDown } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, FileText, CheckCircle2, Loader2, ChevronDown, Download } from 'lucide-react';
+import { usePDF } from 'react-to-pdf';
 
 const RiskBadge = ({ level }) => (
   <span className={`risk-badge ${level.toLowerCase()}`}>
@@ -8,10 +9,54 @@ const RiskBadge = ({ level }) => (
   </span>
 );
 
+const PrecedentMatch = ({ p, i }) => {
+  const [expanded, setExpanded] = useState(false);
+  const text = p.text || "";
+  const shouldTruncate = text.length > 300;
+  
+  const displayText = shouldTruncate && !expanded ? text.slice(0, 300) + "..." : text;
+
+  return (
+    <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '4px', fontSize: '0.85rem' }}>
+      <div style={{ fontWeight: 'bold', marginBottom: '0.25rem', color: 'var(--text-secondary)', fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+        <span>Document: {p.metadata?.source || 'Unknown'}</span>
+        <span>Match #{i + 1}</span>
+      </div>
+      <div style={{ fontStyle: 'italic', lineHeight: '1.5', opacity: 0.9 }}>
+        "{displayText}"
+      </div>
+      {shouldTruncate && (
+        <button 
+          onClick={() => setExpanded(!expanded)}
+          data-html2canvas-ignore="true"
+          style={{ 
+            background: 'none', 
+            border: 'none', 
+            color: 'var(--accent-color)', 
+            cursor: 'pointer', 
+            fontSize: '0.75rem', 
+            padding: 0, 
+            marginTop: '0.5rem',
+            textDecoration: 'underline'
+          }}
+        >
+          {expanded ? "Show Less" : "Read More"}
+        </button>
+      )}
+    </div>
+  );
+};
+
 const ClauseCard = ({ clause, idx }) => {
   const [explanation, setExplanation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  
+  const [precedents, setPrecedents] = useState(null);
+  const [loadingPrecedents, setLoadingPrecedents] = useState(false);
+  const [precedentsExpanded, setPrecedentsExpanded] = useState(false);
+  
+  const isHighRisk = clause.risk_level === 'HIGH';
 
   const handleExplain = async () => {
     if (explanation) {
@@ -34,6 +79,28 @@ const ClauseCard = ({ clause, idx }) => {
       setExplanation('Failed to generate explanation. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSearchPrecedents = async () => {
+    if (precedents) {
+      setPrecedentsExpanded(!precedentsExpanded);
+      return;
+    }
+
+    setLoadingPrecedents(true);
+    setPrecedentsExpanded(true);
+
+    try {
+      const response = await axios.post('http://localhost:8000/api/find-precedents', {
+        clause_text: clause.clause_text
+      });
+      setPrecedents(response.data.precedents || []);
+    } catch (err) {
+      setPrecedents([]);
+      console.error(err);
+    } finally {
+      setLoadingPrecedents(false);
     }
   };
 
@@ -73,38 +140,78 @@ const ClauseCard = ({ clause, idx }) => {
         {clause.risk_reason}
       </div>
 
-      {/* Explain button */}
-      <button
-        onClick={handleExplain}
-        disabled={loading}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          padding: '0.5rem 1rem',
-          fontSize: '0.85rem',
-          cursor: loading ? 'not-allowed' : 'pointer',
-          background: 'transparent',
-          border: '1px solid var(--accent-color)',
-          borderRadius: '6px',
-          color: 'var(--accent-color)',
-          transition: 'all 0.2s'
-        }}
-      >
-        {loading ? (
-          <>
-            <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
-            Generating explanation...
-          </>
-        ) : explanation ? (
-          <>
-            <ChevronDown size={14} style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
-            {expanded ? 'Hide explanation' : 'Show explanation'}
-          </>
-        ) : (
-          '✦ Explain this clause'
+      {/* Action Buttons */}
+      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+        {/* Explain button */}
+        <button
+          onClick={handleExplain}
+          disabled={loading}
+          data-html2canvas-ignore="true"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.5rem 1rem',
+            fontSize: '0.85rem',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            background: 'transparent',
+            border: '1px solid var(--accent-color)',
+            borderRadius: '6px',
+            color: 'var(--accent-color)',
+            transition: 'all 0.2s'
+          }}
+        >
+          {loading ? (
+            <>
+              <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+              Generating...
+            </>
+          ) : explanation ? (
+            <>
+              <ChevronDown size={14} style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
+              {expanded ? 'Hide explanation' : 'Show explanation'}
+            </>
+          ) : (
+            '✦ Explain this clause'
+          )}
+        </button>
+
+        {/* Find Precedents Button */}
+        {isHighRisk && (
+          <button
+            onClick={handleSearchPrecedents}
+            disabled={loadingPrecedents}
+            data-html2canvas-ignore="true"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem 1rem',
+              fontSize: '0.85rem',
+              cursor: loadingPrecedents ? 'not-allowed' : 'pointer',
+              background: 'transparent',
+              border: '1px solid var(--risk-high)',
+              borderRadius: '6px',
+              color: 'var(--risk-high)',
+              transition: 'all 0.2s'
+            }}
+          >
+            {loadingPrecedents ? (
+              <>
+                <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                Searching DB...
+              </>
+            ) : precedents ? (
+              <>
+                <ChevronDown size={14} style={{ transform: precedentsExpanded ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
+                {precedentsExpanded ? 'Hide Past Clauses' : 'Show Past Clauses'}
+              </>
+            ) : (
+              '🔍 Find Similar Past Clauses'
+            )}
+          </button>
         )}
-      </button>
+      </div>
 
       {/* AI Explanation — only shown after button click */}
       {expanded && explanation && (
@@ -123,6 +230,29 @@ const ClauseCard = ({ clause, idx }) => {
         </div>
       )}
 
+      {/* Database Precedents — only shown after button click */}
+      {precedentsExpanded && precedents && (
+        <div style={{
+          marginTop: '0.75rem',
+          padding: '1rem',
+          background: 'rgba(255, 90, 90, 0.08)',
+          border: '1px solid rgba(255, 90, 90, 0.2)',
+          borderRadius: '8px',
+          color: 'var(--text-primary)'
+        }}>
+          <h4 style={{ marginBottom: '0.75rem', color: 'var(--risk-high)', fontSize: '0.9rem' }}>Database Matches (Past Similar Clauses)</h4>
+          {precedents.length === 0 ? (
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>No similar past clauses found in the local database.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {precedents.map((p, i) => (
+                <PrecedentMatch key={p.id || i} p={p} i={i} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
     </div>
   );
 };
@@ -130,6 +260,7 @@ const ClauseCard = ({ clause, idx }) => {
 
 const Dashboard = ({ data }) => {
   const { results, task } = data;
+  const { toPDF, targetRef } = usePDF({filename: `${data.filename || 'Legal'}_Analysis_Report.pdf`});
 
   const isContractAnalysis = task === 'analyze_contract';
   const isSummary = task === 'summarize_case';
@@ -142,17 +273,28 @@ const Dashboard = ({ data }) => {
   const safeCount = clauses.filter(c => c.risk_level === 'LOW').length;
 
   return (
-    <div className="dashboard">
+    <div className="dashboard" ref={targetRef} style={{ backgroundColor: '#0d1117', padding: '2rem', borderRadius: '8px' }}>
 
       {/* Header */}
-      <div className="glass-panel" style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-          <FileText size={32} color="var(--accent-color)" />
-          <h2>Analysis Report: {data.filename}</h2>
+      <div className="glass-panel" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+            <FileText size={32} color="var(--accent-color)" />
+            <h2>Analysis Report: {data.filename}</h2>
+          </div>
+          <p style={{ color: 'var(--text-secondary)' }}>
+            Processed {(results.metadata?.doc_length_chars / 1024).toFixed(2)} KB of text.
+          </p>
         </div>
-        <p style={{ color: 'var(--text-secondary)' }}>
-          Processed {(results.metadata?.doc_length_chars / 1024).toFixed(2)} KB of text.
-        </p>
+        <button 
+          className="btn-primary" 
+          onClick={() => toPDF()}
+          data-html2canvas-ignore="true"
+          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+        >
+          <Download size={18} />
+          Download PDF
+        </button>
       </div>
 
       {isContractAnalysis && (
