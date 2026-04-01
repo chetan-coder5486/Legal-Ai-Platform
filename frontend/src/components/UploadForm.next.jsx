@@ -1,12 +1,16 @@
 import { useRef, useState } from 'react';
 import axios from 'axios';
 import {
+  BrainCircuit,
   CheckCircle,
+  FileBadge2,
   FileSearch,
   FileText,
-  Layers3,
-  ScrollText,
+  Gavel,
+  Scale,
   ShieldCheck,
+  ScrollText,
+  Sparkles,
   UploadCloud,
 } from 'lucide-react';
 
@@ -143,57 +147,79 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
 
   return (
     <div className="upload-shell animate-slide-up">
-      <section className="glass-panel upload-hero-panel">
-        <div className="upload-hero-copy">
-          <div className="hero-kicker">Legal workflow cockpit</div>
-          <h2>Start With The Right Intake Path</h2>
+      <form onSubmit={handleSubmit} className="glass-panel upload-command-center">
+        <section className="legal-ai-hero">
+          <div className="hero-kicker">Legal AI Chamber</div>
+          <h2>Brownstone intelligence for contracts, clauses, and case files.</h2>
           <p>
-            Upload a legal document, choose the analysis mode, and get either a negotiation-grade clause report
-            or a fast executive summary.
+            A single-screen legal workspace built for fast review. Upload once, choose the analysis path, and get an
+            AI-assisted legal reading without leaving the page.
           </p>
 
-          <div className="upload-guidance-grid">
-            <div className="guidance-card">
-              <Layers3 size={18} />
-              <div>
-                <strong>Structured outputs</strong>
-                <span>Clause scores, evidence, and recommendations when you run contract review.</span>
-              </div>
+          <div className="hero-symbol-row">
+            <div className="hero-symbol-card">
+              <Scale size={18} />
+              <span>Legal reasoning</span>
             </div>
-
-            <div className="guidance-card">
-              <FileSearch size={18} />
-              <div>
-                <strong>Designed for review</strong>
-                <span>Built to help you spot risk concentration and prioritize redlines faster.</span>
-              </div>
+            <div className="hero-symbol-card">
+              <BrainCircuit size={18} />
+              <span>AI assistance</span>
+            </div>
+            <div className="hero-symbol-card">
+              <ShieldCheck size={18} />
+              <span>Risk review</span>
             </div>
           </div>
-        </div>
 
-        <div className="upload-side-panel">
-          <div className="upload-side-badge">Recommended for first pass</div>
-          <div className="upload-side-title">
-            <SelectedIcon size={20} />
-            <span>{selectedPipeline.title}</span>
+          <div className="hero-insight-grid">
+            <article className="hero-insight-card">
+              <div className="hero-insight-icon">
+                <Gavel size={18} />
+              </div>
+              <div>
+                <strong>Contract risk review</strong>
+                <span>Clause classification, legal exposure scoring, and negotiation-ready recommendations.</span>
+              </div>
+            </article>
+
+            <article className="hero-insight-card">
+              <div className="hero-insight-icon">
+                <ScrollText size={18} />
+              </div>
+              <div>
+                <strong>Long document summary</strong>
+                <span>Fast orientation for judgments, pleadings, and lengthy legal records.</span>
+              </div>
+            </article>
+
+            <article className="hero-insight-card">
+              <div className="hero-insight-icon">
+                <FileBadge2 size={18} />
+              </div>
+              <div>
+                <strong>Accepted formats</strong>
+                <span>PDF, DOCX, and TXT supported in the same intake flow.</span>
+              </div>
+            </article>
           </div>
-          <p>{selectedPipeline.subtitle}</p>
-          <ul className="upload-side-list">
-            {selectedPipeline.features.map((feature) => (
-              <li key={feature}>{feature}</li>
-            ))}
-          </ul>
-        </div>
-      </section>
+        </section>
 
-      <form onSubmit={handleSubmit} className="upload-layout">
-        <section className="glass-panel pipeline-panel">
-          <div className="panel-head">
-            <Layers3 size={20} />
-            <h3>Select Intelligence Pipeline</h3>
+        <section className="upload-intake-panel">
+          <div className="intake-panel-top">
+            <div className="upload-side-badge">Intake Console</div>
+            <div className="upload-side-title">
+              <SelectedIcon size={20} />
+              <span>{selectedPipeline.title}</span>
+            </div>
+            <p>{selectedPipeline.subtitle}</p>
           </div>
 
-          <div className="pipeline-option-grid">
+          <div className="intake-section-head">
+            <Sparkles size={18} />
+            <h3>Choose Analysis Mode</h3>
+          </div>
+
+          <div className="pipeline-stack">
             {Object.entries(PIPELINES).map(([value, pipeline]) => {
               const Icon = pipeline.icon;
               const active = value === taskType;
@@ -207,23 +233,24 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
                 >
                   <div className="pipeline-option-top">
                     <Icon size={20} />
-                    <span>{pipeline.title}</span>
+                    <div>
+                      <span>{pipeline.title}</span>
+                      <small>{pipeline.cta}</small>
+                    </div>
                   </div>
                   <p>{pipeline.subtitle}</p>
                 </button>
               );
             })}
           </div>
-        </section>
 
-        <section className="glass-panel upload-panel">
-          <div className="panel-head">
-            <UploadCloud size={20} />
+          <div className="intake-section-head">
+            <UploadCloud size={18} />
             <h3>Upload Document</h3>
           </div>
 
           <div
-            className={`upload-zone ${dragActive ? 'drag-active' : ''}`}
+            className={`upload-zone upload-zone-primary ${dragActive ? 'drag-active' : ''}`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
@@ -264,8 +291,8 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
             )}
           </div>
 
-          <div className="upload-footer">
-            <div className="upload-meta">
+          <div className="upload-footer compact intake-footer">
+            <div className="upload-meta upload-meta-compact">
               <strong>What happens next</strong>
               <span>
                 {taskType === 'summarize_case'
@@ -276,12 +303,21 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
 
             <button
               type="submit"
-              className="btn-primary"
+              className="btn-primary btn-legal"
               disabled={!file}
-              style={{ width: '100%', padding: '1.2rem', fontSize: '1.05rem' }}
+              style={{ width: '100%', padding: '1rem 1.15rem', fontSize: '1rem' }}
             >
               {selectedPipeline.cta}
             </button>
+
+            <div className="intake-trust-row">
+              {selectedPipeline.features.map((feature) => (
+                <div key={feature} className="trust-chip">
+                  <CheckCircle size={14} />
+                  <span>{feature}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       </form>
