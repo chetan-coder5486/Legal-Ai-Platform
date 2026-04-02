@@ -1,9 +1,10 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
 from typing import Dict, Any
 from pydantic import BaseModel
 from backend.services.parsers import parse_document
 from backend.services.orchestrator import route_document
 from backend.services.explainability import generate_explanation
+from backend.pipelines.research_agent import ingest_document
 
 router = APIRouter()
 
@@ -15,8 +16,28 @@ class ClauseRequest(BaseModel):
     risk_reason: str
 
 
+class PrecedentRequest(BaseModel):
+    clause_text: str
+
+@router.post("/find-precedents")
+async def find_precedents(req: PrecedentRequest) -> Dict[str, Any]:
+    """
+    Looks up similar past clauses from ChromaDB.
+    """
+    try:
+        from backend.pipelines.research_agent import search_precedents
+        results = search_precedents(req.clause_text, top_k=3)
+        return {
+            "status": "success",
+            "precedents": results
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/upload")
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     task_type: str = Form("analyze_contract")
 ) -> Dict[str, Any]:
@@ -32,6 +53,10 @@ async def upload_document(
                 status_code=400,
                 detail="Could not extract text from document."
             )
+
+        # Continual Learning: Add to local Vector database in the background
+        if task_type in ("analyze_contract", "summarize_case"):
+            background_tasks.add_task(ingest_document, file.filename, text)
 
         try:
             result = route_document(text, task_type=task_type)

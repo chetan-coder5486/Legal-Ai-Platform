@@ -1,0 +1,63 @@
+{
+  "text_length": 1222,
+  "text_preview": "EMPLOYMENT AGREEMENT\nThis Employment Agreement (the \"Agreement\") is made and entered into as of October 1,\n2023, by and between Globex Corporation (\"Employer\") and John Doe (\"Employee\").\n1. Term of Employment and Termination\nThe Employer agrees to employ the Employee, and the Employee agrees to be employed by\nthe Employer, on an at-will basis. The Employer may terminate this Agreement immediately\nwithout cause, without notice, and without any severance compensation.\n2. Confidentiality\nThe Employ",
+  "total_clauses": 6,
+  "analyzed_clauses_count": 6,
+  "analysis": {
+    "pipeline": "NDA Contract Analysis (Embedding-Based)",
+    "total_clauses_detected": 6,
+    "total_clauses_analyzed": 6,
+    "risk_summary": {
+      "HIGH": 0,
+      "MEDIUM": 1,
+      "LOW": 5
+    },
+    "analyzed_clauses": [
+      {
+        "clause_text": "EMPLOYMENT AGREEMENT\nThis Employment Agreement (the \"Agreement\") is made and entered into as of October 1,\n2023, by and between Globex Corporation (\"Employer\") and John Doe (\"Employee\").",
+        "type": "Term and duration of agreement clause",
+        "confidence": 0.393,
+        "risk_level": "LOW",
+        "risk_reason": "No unusual or risky patterns detected"
+      },
+      {
+        "clause_text": "1. Term of Employment and Termination\nThe Employer agrees to employ the Employee, and the Employee agrees to be employed by\nthe Employer, on an at-will basis. The Employer may terminate this Agreement immediately\nwithout cause, without notice, and without any severance compensation.",
+        "type": "Termination of agreement clause",
+        "confidence": 0.636,
+        "risk_level": "MEDIUM",
+        "risk_reason": "Termination allowed without cause"
+      },
+      {
+        "clause_text": "2. Confidentiality\nThe Employee agrees to keep confidential all proprietary information, trade secrets, and client\nlists during the term of employment and for a period of two years thereafter.",
+        "type": "Obligations of confidentiality and non-disclosure clause",
+        "confidence": 0.659,
+        "risk_level": "LOW",
+        "risk_reason": "No unusual or risky patterns detected"
+      },
+      {
+        "clause_text": "3. Limitation of Liability\nThe Employee agrees that the Employer's liability under this agreement, whether arising out\nof contract, negligence, or any other cause of action, shall be completely unlimited and\nwithout financial cap for any damages the Employee may suffer.",
+        "type": "Permitted disclosures and exceptions clause",
+        "confidence": 0.479,
+        "risk_level": "LOW",
+        "risk_reason": "No unusual or risky patterns detected"
+      },
+      {
+        "clause_text": "4. Governing Law\nThis Agreement shall be construed in accordance with the laws of the State of Texas.",
+        "type": "Entire agreement and amendments clause",
+        "confidence": 0.475,
+        "risk_level": "LOW",
+        "risk_reason": "No unusual or risky patterns detected"
+      },
+      {
+        "clause_text": "5. Base Salary and Payment\nThe Employee shall receive a base salary of $120,000 per year, payable in bi-weekly\ninstallments in accordance with the Employer's standard payroll practices.",
+        "type": "Unclassified clause",
+        "confidence": 0.134,
+        "risk_level": "LOW",
+        "risk_reason": "No unusual or risky patterns detected"
+      }
+    ]
+  },
+  "segments": [
+    "EMPLOYMENT AGREEMENT\nThis Employment Agreement (the \"Agreement\") is made and entered into as of October 1,\n2023, by and between Globex Corporation (\"Employer\") and John Doe (\"Employee\").\n1. Term of Employment and Termination\nThe Employer agrees to employ the Employee, and the Employee agrees to be employed by\nthe Employer, on an at-will basis. The Employer may terminate this Agreement immediately\nwithout cause, without notice, and without any severance compensation.\n2. Confidentiality\nThe Employee agrees to keep confidential all proprietary information, trade secrets, and client\nlists during the term of employment and for a period of two years thereafter.\n3. Limitation of Liability\nThe Employee agrees that the Employer's liability under this agreement, whether arising out\nof contract, negligence, or any other cause of action, shall be completely unlimited and\nwithout financial cap for any damages the Employee may suffer.\n4. Governing Law\nThis Agreement shall be construed in accordance with the laws of the State of Texas.\n5. Base Salary and Payment\nThe Employee shall receive a base salary of $120,000 per year, payable in bi-weekly\ninstallments in accordance with the Employer's standard payroll practices."
+  ]
+}

@@ -13,8 +13,9 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
+  Download,
 } from 'lucide-react';
-
+import generatePDF from 'react-to-pdf';
 const RiskBadge = ({ level }) => (
   <span className={`risk-badge ${level.toLowerCase()}`}>{level} RISK</span>
 );
@@ -264,13 +265,14 @@ const ClauseCard = ({ clause, idx }) => {
             type="button"
             onClick={() => setDetailsOpen(!detailsOpen)}
             className="explain-btn secondary"
+            data-html2canvas-ignore="true"
           >
             <ChevronDown size={14} style={{ transform: detailsOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} />
             {detailsOpen ? 'Hide details' : 'View details'}
           </button>
         )}
 
-        <button type="button" onClick={handleExplain} disabled={loading} className="explain-btn">
+        <button type="button" onClick={handleExplain} disabled={loading} className="explain-btn" data-html2canvas-ignore="true">
           {loading ? (
             <>
               <Loader2 size={14} className="spin-icon" />
@@ -353,6 +355,16 @@ const ClauseCard = ({ clause, idx }) => {
 const Dashboard = ({ data }) => {
   const [riskFilter, setRiskFilter] = useState('ALL');
   
+  const handleDownloadPDF = () => {
+    const element = document.getElementById('dashboard-pdf-root');
+    if (!element) return;
+    
+    generatePDF(() => element, {
+      filename: `${data.filename || 'Analysis'}_Report.pdf`,
+      page: { margin: 10 }
+    });
+  };
+
   let results = data.results;
   let task = data.task;
 
@@ -425,9 +437,16 @@ const Dashboard = ({ data }) => {
   const heatmapRows = analyticsByType.slice(0, 8);
 
   return (
-    <div className="dashboard">
-      <div className="report-hero glass-panel compact-hero">
-        <div className="report-hero-copy">
+    <div className="dashboard" id="dashboard-pdf-root" style={{ backgroundColor: '#0d1117', padding: '1rem', borderRadius: '8px' }}>
+      <div className="report-hero glass-panel compact-hero" style={{ position: 'relative' }}>
+        <button 
+          onClick={handleDownloadPDF} 
+          data-html2canvas-ignore="true"
+          style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', zIndex: 50, display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--accent-color)', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+        >
+          <Download size={16} /> Download PDF
+        </button>
+        <div className="report-hero-copy" style={{ paddingRight: '120px' }}>
           <div className="hero-kicker">Contract intelligence report</div>
           <h2>Analysis Report: {data.filename || "Uploaded Document"}</h2>
           <p>Compact review with confidence, negotiation priorities, and optional clause-level detail.</p>
@@ -599,6 +618,7 @@ const Dashboard = ({ data }) => {
                   type="button"
                   className={`filter-chip ${riskFilter === level ? 'active' : ''}`}
                   onClick={() => setRiskFilter(level)}
+                  data-html2canvas-ignore="true"
                 >
                   {level === 'ALL' ? 'All clauses' : `${level} risk`}
                 </button>
