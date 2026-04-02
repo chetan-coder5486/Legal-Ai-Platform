@@ -629,6 +629,304 @@ main {
   gap: 0.85rem;
 }
 
+.analytics-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.analytics-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.analytics-copy {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.donut-analytics {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.95fr) minmax(240px, 1fr);
+  gap: 1rem;
+  align-items: center;
+}
+
+.donut-shell {
+  position: relative;
+  width: min(100%, 260px);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 0.35rem;
+  border-radius: 999px;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.01) 65%, transparent 66%);
+}
+
+.donut-chart {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: rotate(-18deg);
+}
+
+.donut-track {
+  fill: transparent;
+  stroke: rgba(255, 255, 255, 0.07);
+  stroke-width: 20;
+}
+
+.donut-segment {
+  cursor: pointer;
+  transition: filter 0.18s ease, opacity 0.18s ease;
+  opacity: 0.92;
+}
+
+.donut-segment:not(.active) {
+  opacity: 0.74;
+}
+
+.donut-segment.active {
+  opacity: 1;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.08));
+}
+
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  pointer-events: none;
+}
+
+.donut-center span,
+.donut-center small {
+  color: var(--text-secondary);
+}
+
+.donut-center span {
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.donut-center strong {
+  font-size: 2.4rem;
+  line-height: 1.1;
+  margin: 0.25rem 0;
+}
+
+.donut-center small {
+  font-size: 0.84rem;
+}
+
+.donut-sidepanel {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.donut-tooltip-card {
+  padding: 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.donut-tooltip-top {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--dot-color);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--dot-color) 18%, transparent);
+  flex: 0 0 auto;
+}
+
+.donut-tooltip-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.8rem;
+}
+
+.donut-tooltip-metrics div {
+  padding: 0.75rem 0.7rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.donut-tooltip-metrics span {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.35rem;
+}
+
+.donut-tooltip-metrics strong {
+  font-size: 1.25rem;
+}
+
+.donut-tooltip-card p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.donut-legend {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.donut-legend-item {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 16px;
+  padding: 0.8rem 0.85rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.donut-legend-item:hover,
+.donut-legend-item:focus-visible,
+.donut-legend-item.active {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.donut-legend-copy strong {
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
+.donut-legend-copy span,
+.donut-legend-value {
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+
+.heatmap-table {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.7fr) repeat(3, minmax(72px, 0.65fr)) minmax(92px, 0.8fr);
+  gap: 0.55rem;
+}
+
+.heatmap-cell {
+  min-height: 72px;
+  padding: 0.8rem 0.7rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.heatmap-header {
+  min-height: 48px;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.heatmap-type-label,
+.heatmap-total {
+  place-items: start;
+  text-align: left;
+}
+
+.heatmap-type-label strong,
+.heatmap-total strong {
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.heatmap-type-label span,
+.heatmap-total span {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.heatmap-value {
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.heatmap-value strong {
+  font-size: 1.1rem;
+}
+
+.heatmap-value.none {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.heatmap-value.mild.risk-high {
+  background: rgba(210, 106, 82, 0.16);
+  border-color: rgba(210, 106, 82, 0.22);
+}
+
+.heatmap-value.warm.risk-high {
+  background: rgba(210, 106, 82, 0.24);
+  border-color: rgba(210, 106, 82, 0.35);
+}
+
+.heatmap-value.hot.risk-high {
+  background: rgba(210, 106, 82, 0.34);
+  border-color: rgba(210, 106, 82, 0.48);
+}
+
+.heatmap-value.mild.risk-medium {
+  background: rgba(210, 162, 95, 0.16);
+  border-color: rgba(210, 162, 95, 0.22);
+}
+
+.heatmap-value.warm.risk-medium {
+  background: rgba(210, 162, 95, 0.24);
+  border-color: rgba(210, 162, 95, 0.35);
+}
+
+.heatmap-value.hot.risk-medium {
+  background: rgba(210, 162, 95, 0.34);
+  border-color: rgba(210, 162, 95, 0.48);
+}
+
+.heatmap-value.mild.risk-low {
+  background: rgba(143, 175, 121, 0.14);
+  border-color: rgba(143, 175, 121, 0.2);
+}
+
+.heatmap-value.warm.risk-low {
+  background: rgba(143, 175, 121, 0.22);
+  border-color: rgba(143, 175, 121, 0.3);
+}
+
+.heatmap-value.hot.risk-low {
+  background: rgba(143, 175, 121, 0.3);
+  border-color: rgba(143, 175, 121, 0.42);
+}
+
 .panel-head,
 .detail-title {
   display: flex;
@@ -1116,9 +1414,12 @@ select:focus, input:focus {
   .upload-command-center,
   .report-hero,
   .insight-grid,
+  .analytics-grid,
   .detail-grid,
   .dashboard-grid,
-  .executive-strip {
+  .executive-strip,
+  .donut-analytics,
+  .donut-tooltip-metrics {
     grid-template-columns: 1fr;
   }
 
@@ -1151,6 +1452,19 @@ select:focus, input:focus {
   .hero-symbol-row {
     gap: 0.55rem;
   }
+
+  .heatmap-table {
+    grid-template-columns: minmax(140px, 1.4fr) repeat(3, minmax(60px, 0.6fr)) minmax(76px, 0.7fr);
+  }
+
+  .heatmap-cell {
+    min-height: 64px;
+    padding: 0.7rem 0.55rem;
+  }
+
+  .donut-shell {
+    width: min(100%, 220px);
+  }
 }
 
 @media (max-width: 640px) {
@@ -1177,5 +1491,19 @@ select:focus, input:focus {
 
   .upload-intake-panel {
     padding: 0.9rem;
+  }
+
+  .heatmap-table {
+    overflow-x: auto;
+    display: grid;
+    min-width: 540px;
+  }
+
+  .donut-legend-item {
+    grid-template-columns: auto 1fr;
+  }
+
+  .donut-legend-value {
+    grid-column: 2;
   }
 }
