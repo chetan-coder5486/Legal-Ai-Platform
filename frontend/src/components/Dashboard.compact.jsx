@@ -15,7 +15,7 @@ import {
   Target,
   Download,
 } from 'lucide-react';
-import generatePDF from 'react-to-pdf';
+import { usePDF } from 'react-to-pdf';
 const RiskBadge = ({ level }) => (
   <span className={`risk-badge ${level.toLowerCase()}`}>{level} RISK</span>
 );
@@ -355,14 +355,19 @@ const ClauseCard = ({ clause, idx }) => {
 const Dashboard = ({ data }) => {
   const [riskFilter, setRiskFilter] = useState('ALL');
   
-  const handleDownloadPDF = () => {
-    const element = document.getElementById('dashboard-pdf-root');
-    if (!element) return;
-    
-    generatePDF(() => element, {
-      filename: `${data.filename || 'Analysis'}_Report.pdf`,
-      page: { margin: 10 }
-    });
+  const { toPDF, targetRef } = usePDF({
+    filename: `${data?.filename || 'Analysis'}_Report.pdf`,
+    page: { margin: 10 }
+  });
+  
+  const handleDownloadPDF = async () => {
+    try {
+      await toPDF();
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      // Fallback if html2canvas crashes on the SVGs
+      window.print();
+    }
   };
 
   let results = data.results;
@@ -437,7 +442,7 @@ const Dashboard = ({ data }) => {
   const heatmapRows = analyticsByType.slice(0, 8);
 
   return (
-    <div className="dashboard" id="dashboard-pdf-root" style={{ backgroundColor: '#0d1117', padding: '1rem', borderRadius: '8px' }}>
+    <div className="dashboard" ref={targetRef} id="dashboard-pdf-root" style={{ backgroundColor: '#0d1117', padding: '1rem', borderRadius: '8px' }}>
       <div className="report-hero glass-panel compact-hero" style={{ position: 'relative' }}>
         <button 
           onClick={handleDownloadPDF} 
