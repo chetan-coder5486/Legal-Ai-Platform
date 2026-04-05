@@ -1,6 +1,8 @@
-import os
+from pathlib import Path
 from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), encoding="utf-8")
+
+env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=env_path, encoding="utf-8")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

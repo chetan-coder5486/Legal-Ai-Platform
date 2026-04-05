@@ -302,13 +302,18 @@ def assess_risk(clause_text: str, clause_type: str) -> dict:
             )
 
     if category == "governing_law":
-        if "india" not in text:
+        known_jurisdictions = [
+            "india", "england", "wales", "scotland", "uk", "united kingdom",
+            "delaware", "california", "new york", "new york state",
+            "singapore", "australia", "canada", "ireland"
+        ]
+        if not any(j in text for j in known_jurisdictions):
             score += _add_risk(
                 matched_rules,
                 reasons,
                 recommendations,
                 "governing_law_foreign",
-                "Foreign jurisdiction",
+                "Unusual or unrecognised jurisdiction",
                 2,
                 _extract_evidence(text, [r"laws of [a-z\s]+", r"jurisdiction of [a-z\s]+"]),
                 "Confirm whether the dispute venue and governing law are operationally acceptable.",
@@ -316,8 +321,8 @@ def assess_risk(clause_text: str, clause_type: str) -> dict:
         else:
             _add_positive(
                 positive_signals,
-                "India governing law",
-                "india",
+                "Recognised jurisdiction",
+                _extract_evidence(text, [r"india|england|wales|delaware|singapore|california"]),
             )
 
     if "regulatory" in text and "required by law" not in text and "court order" not in text:
@@ -452,12 +457,83 @@ def assess_risk(clause_text: str, clause_type: str) -> dict:
                 "Pandemic coverage present",
                 "pandemic",
             )
+    # ── NDA-specific patterns ─────────────────────────────────────────────
+
+    # Broad confidentiality definition
+    if re.search(r"any\s+(and\s+all|information|data).{0,50}(confidential|proprietary)", text):
+        score += _add_risk(
+            matched_rules, reasons, recommendations,
+            "broad_definition",
+            "Overly broad confidentiality definition",
+            2,
+            _extract_evidence(text, [r"any and all.{0,30}confidential", r"any information.{0,30}confidential"]),
+            "Narrow the definition to specifically identified categories of information.",
+        )
+
+    # No time limit on confidentiality obligations
+    if ("confidential" in text
+            and not re.search(r"\b\d+\s*(year|month)\b|perpetual|indefinite|no\s+expir", text)
+            and category in ("confidentiality", "obligations of confidentiality")):
+        score += _add_risk(
+            matched_rules, reasons, recommendations,
+            "no_duration",
+            "No confidentiality duration specified",
+            2,
+            "duration not found",
+            "Add an explicit confidentiality period, e.g. 2-3 years from date of disclosure.",
+        )
+
+    # One-sided obligations on receiving party
+    if (re.search(r"receiving\s+party\s+(shall|must|agrees|will)", text)
+            and not re.search(r"disclosing\s+party\s+(shall|must|agrees|will)", text)):
+        score += _add_risk(
+            matched_rules, reasons, recommendations,
+            "one_sided",
+            "One-sided obligations on receiving party only",
+            1,
+            "receiving party shall",
+            "Consider whether mutual obligations are appropriate.",
+        )
+
+    # Information shared without restriction
+    if re.search(r"shared\s+freely|without\s+restriction|freely\s+available|freely\s+shared", text):
+        score += _add_risk(
+            matched_rules, reasons, recommendations,
+            "unrestricted_sharing",
+            "Information may be shared without restriction",
+            3,
+            _extract_evidence(text, [r"shared freely", r"without restriction", r"freely available"]),
+            "Add explicit restrictions on disclosure scope and permitted recipients.",
+        )
+
+    # Oral disclosures included
+    if re.search(r"\b(oral|verbal)\b.{0,60}(confidential|disclos|information)", text):
+        score += _add_risk(
+            matched_rules, reasons, recommendations,
+            "oral_disclosures",
+            "Includes oral disclosures",
+            1,
+            _extract_evidence(text, [r"oral.{0,30}confidential", r"verbal.{0,30}disclosure"]),
+            "Consider requiring oral disclosures to be confirmed in writing within a set period.",
+        )
+
+    # Obligations survive termination without limit
+    if re.search(r"surviv(e|es|al).{0,30}termination", text) and \
+       not re.search(r"\b\d+\s*(year|month)\b", text):
+        score += _add_risk(
+            matched_rules, reasons, recommendations,
+            "survival_unlimited",
+            "Survival obligations with no time limit",
+            2,
+            _extract_evidence(text, [r"surviv.{0,20}termination"]),
+            "Define a specific survival period rather than open-ended post-termination obligations.",
+        )
 
     normalized_score = max(score, 0)
 
-    if normalized_score >= 5:
+    if normalized_score >= 3:
         level = "HIGH"
-    elif normalized_score >= 2:
+    elif normalized_score >= 1:
         level = "MEDIUM"
     else:
         level = "LOW"

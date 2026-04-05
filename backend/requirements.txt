@@ -17,5 +17,3 @@ Pillow
 anthropic
 python-dotenv
 groq
-re
-textwrap
