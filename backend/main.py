@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), encoding="utf-8")
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"), encoding="utf-8")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
