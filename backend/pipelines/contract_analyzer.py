@@ -67,6 +67,10 @@ SKIP_PATTERNS = re.compile(
     r"|\(note"
     r"|to\s+be\s+duly\s+signed"
     r"|key\s+managerial"
+    r"|confidentiality\s+and\s+non\s+disclosure\s+agreement"
+    r"|non.disclosure\s+agreement"
+    r"|non.circumvention\s+agreement"
+    r"|mutual\s+non.disclosure"
     r")",
     re.IGNORECASE,
 )
@@ -179,6 +183,18 @@ def segment_clauses(text: str) -> list:
 
         blank_ratio = chunk.count("_") / max(len(chunk), 1)
         if blank_ratio > 0.15:
+            continue
+        # Skip document title blocks (all caps title + note in brackets)
+        if re.match(r'^[A-Z\s\(&]{10,}$', chunk.split('\n')[0].strip()):
+            continue
+
+        # Skip lettered recitals more aggressively — A. B. C. D. E.
+        if re.match(r'^[A-E]\.\s+', chunk) and len(chunk) < 600:
+            continue
+
+        # Skip chunks that contain "note: to be" or signature instructions anywhere
+        if re.search(r'note\s*:\s*to\s+be\s+(duly\s+)?signed|key\s+managerial\s+personnel', 
+                     chunk, re.IGNORECASE):
             continue
 
         cleaned.append(chunk)

@@ -1,6 +1,12 @@
-from backend.database.connection import vector_collection
-from sentence_transformers import SentenceTransformer
+try:
+    from sentence_transformers import SentenceTransformer
+    _ST_AVAILABLE = True
+except Exception as e:
+    SentenceTransformer = None
+    _ST_AVAILABLE = False
+    print(f"[research_agent] SentenceTransformer unavailable: {e}")
 
+from backend.database.connection import vector_collection
 import uuid
 import datetime
 
@@ -8,6 +14,8 @@ embedder = None
 
 def get_embedder():
     global embedder
+    if not _ST_AVAILABLE:
+        return None
     if embedder is None:
         print("Loading Sentence Transformer...")
         embedder = SentenceTransformer('all-MiniLM-L6-v2')
@@ -18,6 +26,8 @@ def search_precedents(query: str, top_k: int = 2) -> list:
     Embeds a risky clause and searches for similar legal precedents in Vector DB.
     """
     model = get_embedder()
+    if model is None:
+        return []
     query_embedding = model.encode(query).tolist()
     
     try:
@@ -62,6 +72,9 @@ def ingest_document(filename: str, text: str):
         return
         
     model = get_embedder()
+    if model is None:
+        print("[research_agent] Skipping ingestion — model unavailable.")
+        return
     
     ids = []
     documents = []

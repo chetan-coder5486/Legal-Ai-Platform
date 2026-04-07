@@ -1,11 +1,19 @@
 import os
+from pathlib import Path
 from groq import Groq
 from dotenv import load_dotenv
 
 env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
 load_dotenv(env_path, encoding="utf-8")
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+api_key = os.getenv("GROQ_API_KEY")
+if not api_key:
+    raise RuntimeError(
+        f"GROQ_API_KEY not found. Looked for .env at: {env_path}\n"
+        "Make sure .env exists in your Legal-Ai-Platform root folder."
+    )
+
+client = Groq(api_key=api_key)
 
 
 def generate_explanation(risk_analysis: dict) -> dict:
