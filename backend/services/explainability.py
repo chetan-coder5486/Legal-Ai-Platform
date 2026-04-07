@@ -3,9 +3,8 @@ from pathlib import Path
 from groq import Groq
 from dotenv import load_dotenv
 
-# Load .env using absolute path — works regardless of where server is launched from
-env_path = Path(__file__).resolve().parents[2] / ".env"
-load_dotenv(dotenv_path=env_path, encoding="utf-8")
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
+load_dotenv(env_path, encoding="utf-8")
 
 api_key = os.getenv("GROQ_API_KEY")
 if not api_key:
