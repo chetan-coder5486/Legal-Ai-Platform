@@ -62,7 +62,6 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileSelection(e.dataTransfer.files[0]);
     }
@@ -79,9 +78,8 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
     const validTypes = [
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain'
+      'text/plain',
     ];
-
     const validExtension =
       selectedFile.name.endsWith('.pdf') ||
       selectedFile.name.endsWith('.docx') ||
@@ -91,7 +89,6 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
       onError('Please upload a PDF, DOCX, or TXT file.');
       return;
     }
-
     setFile(selectedFile);
   };
 
@@ -99,7 +96,6 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
     inputRef.current?.click();
   };
 
-  // ✅ UPDATED FUNCTION (IMPORTANT FIX HERE)
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!file) return;
@@ -114,25 +110,22 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
       const response = await axios.post(
         'http://localhost:8000/api/upload',
         formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        }
+        { headers: { 'Content-Type': 'multipart/form-data' } }
       );
 
       const data = response.data;
 
-      // 🔥 Normalize response for frontend
-      if (taskType === "summarize_case") {
+      if (taskType === 'summarize_case') {
         onUploadComplete({
-          type: "summary",
-          content: data.results?.summary_data?.final_summary || "No summary generated"
+          type: 'summary',
+          filename: file.name,                              // ← filename added
+          content: data.results,                           // full results so App.jsx can find summary_data
         });
       } else {
         onUploadComplete({
-          type: "contract",
-          content: data.results
+          type: 'contract',
+          filename: file.name,                              // ← filename added
+          content: data.results,                           // { task_type, metadata, contract_analysis }
         });
       }
 
@@ -157,45 +150,28 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
           </p>
 
           <div className="hero-symbol-row">
-            <div className="hero-symbol-card">
-              <Scale size={18} />
-              <span>Legal reasoning</span>
-            </div>
-            <div className="hero-symbol-card">
-              <BrainCircuit size={18} />
-              <span>AI assistance</span>
-            </div>
-            <div className="hero-symbol-card">
-              <ShieldCheck size={18} />
-              <span>Risk review</span>
-            </div>
+            <div className="hero-symbol-card"><Scale size={18} /><span>Legal reasoning</span></div>
+            <div className="hero-symbol-card"><BrainCircuit size={18} /><span>AI assistance</span></div>
+            <div className="hero-symbol-card"><ShieldCheck size={18} /><span>Risk review</span></div>
           </div>
 
           <div className="hero-insight-grid">
             <article className="hero-insight-card">
-              <div className="hero-insight-icon">
-                <Gavel size={18} />
-              </div>
+              <div className="hero-insight-icon"><Gavel size={18} /></div>
               <div>
                 <strong>Contract risk review</strong>
                 <span>Clause classification, legal exposure scoring, and negotiation-ready recommendations.</span>
               </div>
             </article>
-
             <article className="hero-insight-card">
-              <div className="hero-insight-icon">
-                <ScrollText size={18} />
-              </div>
+              <div className="hero-insight-icon"><ScrollText size={18} /></div>
               <div>
                 <strong>Long document summary</strong>
                 <span>Fast orientation for judgments, pleadings, and lengthy legal records.</span>
               </div>
             </article>
-
             <article className="hero-insight-card">
-              <div className="hero-insight-icon">
-                <FileBadge2 size={18} />
-              </div>
+              <div className="hero-insight-icon"><FileBadge2 size={18} /></div>
               <div>
                 <strong>Accepted formats</strong>
                 <span>PDF, DOCX, and TXT supported in the same intake flow.</span>
@@ -223,14 +199,10 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
             {Object.entries(PIPELINES).map(([value, pipeline]) => {
               const Icon = pipeline.icon;
               const active = value === taskType;
-
               return (
-                <button
-                  key={value}
-                  type="button"
+                <button key={value} type="button"
                   className={`pipeline-option ${active ? 'active' : ''}`}
-                  onClick={() => setTaskType(value)}
-                >
+                  onClick={() => setTaskType(value)}>
                   <div className="pipeline-option-top">
                     <Icon size={20} />
                     <div>
@@ -257,25 +229,16 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
             onDrop={handleDrop}
             onClick={onButtonClick}
           >
-            <input
-              ref={inputRef}
-              type="file"
-              onChange={handleChange}
-              accept=".pdf,.docx,.txt"
-              style={{ display: 'none' }}
-            />
+            <input ref={inputRef} type="file" onChange={handleChange}
+              accept=".pdf,.docx,.txt" style={{ display: 'none' }} />
 
             {!file ? (
               <>
                 <UploadCloud className="upload-icon" />
                 <h3>Drop your legal document here</h3>
-                <p style={{ color: 'var(--text-secondary)' }}>
-                  or click to browse from your computer
-                </p>
+                <p style={{ color: 'var(--text-secondary)' }}>or click to browse from your computer</p>
                 <div className="upload-support-row">
-                  <span>PDF</span>
-                  <span>DOCX</span>
-                  <span>TXT</span>
+                  <span>PDF</span><span>DOCX</span><span>TXT</span>
                 </div>
               </>
             ) : (
@@ -301,12 +264,8 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
               </span>
             </div>
 
-            <button
-              type="submit"
-              className="btn-primary btn-legal"
-              disabled={!file}
-              style={{ width: '100%', padding: '1rem 1.15rem', fontSize: '1rem' }}
-            >
+            <button type="submit" className="btn-primary btn-legal" disabled={!file}
+              style={{ width: '100%', padding: '1rem 1.15rem', fontSize: '1rem' }}>
               {selectedPipeline.cta}
             </button>
 

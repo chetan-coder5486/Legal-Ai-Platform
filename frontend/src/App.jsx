@@ -9,8 +9,36 @@ function App() {
   const [error, setError] = useState(null);
   const isLandingState = !reportData && !isLoading;
 
-  const handleUploadComplete = (data) => {
-    setReportData(data);
+  const handleUploadComplete = (rawResponse) => {
+    console.log('[App] Raw backend response:', JSON.stringify(rawResponse, null, 2));
+
+    /**
+     * UploadForm already pre-processes and passes:
+     * {
+     *   type: "contract",
+     *   content: {
+     *     task_type: "analyze_contract",
+     *     metadata: { doc_length_chars: 11100 },
+     *     contract_analysis: { analyzed_clauses: [...], risk_summary: {...} }
+     *   },
+     *   filename: "contract.pdf"
+     * }
+     *
+     * THE FIX: rawResponse.content holds everything → map to normalized.results
+     */
+    const type = rawResponse.type || 'contract';
+    const task = type === 'summary' ? 'summarize_case' : 'analyze_contract';
+
+    const normalized = {
+      filename: rawResponse.filename || rawResponse.content?.filename || 'Uploaded Document',
+      task,
+      type,
+      results: rawResponse.content || rawResponse.results || {},
+    };
+
+    console.log('[App] Normalized clause count:', normalized.results?.contract_analysis?.analyzed_clauses?.length ?? 0);
+
+    setReportData(normalized);
     setIsLoading(false);
   };
 
@@ -50,9 +78,9 @@ function App() {
 
         {!reportData && !isLoading && (
           <div className="animate-slide-up">
-            <UploadForm 
-              onUploadStart={handleUploadStart} 
-              onUploadComplete={handleUploadComplete} 
+            <UploadForm
+              onUploadStart={handleUploadStart}
+              onUploadComplete={handleUploadComplete}
               onError={handleError}
             />
           </div>
@@ -70,25 +98,22 @@ function App() {
 
         {reportData && !isLoading && (
           <div className="animate-slide-up">
-
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
               <button className="btn-primary" onClick={resetUpload}>
                 Analyze Another Document
               </button>
             </div>
 
-            {/* 🔥 CONDITIONAL RENDERING */}
-            {reportData.type === "summary" ? (
+            {reportData.type === 'summary' ? (
               <div className="glass-panel" style={{ padding: '2rem' }}>
                 <h2 style={{ marginBottom: '1rem' }}>📄 Document Summary</h2>
                 <p style={{ whiteSpace: 'pre-line', lineHeight: '1.6' }}>
-                  {reportData.content}
+                  {reportData.results?.summary_data?.final_summary || 'Summarization failed or returned empty.'}
                 </p>
               </div>
             ) : (
               <Dashboard data={reportData} />
             )}
-
           </div>
         )}
       </main>
