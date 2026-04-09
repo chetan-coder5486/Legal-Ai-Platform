@@ -4,7 +4,6 @@ import {
   BrainCircuit,
   CheckCircle,
   FileBadge2,
-  FileSearch,
   FileText,
   Gavel,
   Scale,
@@ -113,26 +112,34 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );
 
-      const data = response.data;
+      const resultPayload = response.data?.results;
 
-      if (taskType === 'summarize_case') {
-        onUploadComplete({
-          type: 'summary',
-          filename: file.name,                              // ← filename added
-          content: data.results,                           // full results so App.jsx can find summary_data
-        });
-      } else {
-        onUploadComplete({
-          type: 'contract',
-          filename: file.name,                              // ← filename added
-          content: data.results,                           // { task_type, metadata, contract_analysis }
-        });
+      if (taskType === 'analyze_contract' && !Array.isArray(resultPayload?.contract_analysis?.analyzed_clauses)) {
+        throw new Error(
+          resultPayload?.error ||
+          resultPayload?.message ||
+          'The backend did not return contract analysis data.'
+        );
       }
 
+      if (taskType === 'summarize_case' && !resultPayload?.summary_data?.final_summary) {
+        throw new Error(
+          resultPayload?.error ||
+          resultPayload?.message ||
+          'The backend did not return a summary.'
+        );
+      }
+
+      onUploadComplete({
+        type: taskType === 'summarize_case' ? 'summary' : 'contract',
+        filename: file.name,
+        content: resultPayload,
+      });
     } catch (err) {
       console.error('Upload error:', err);
       onError(
         err.response?.data?.detail ||
+        err.message ||
         'Failed to process document. Is the backend running?'
       );
     }
