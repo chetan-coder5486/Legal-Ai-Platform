@@ -1,8 +1,7 @@
-import { useState, useRef } from 'react';
+import { useId, useState } from 'react';
 import axios from 'axios';
 import {
   AlertTriangle,
-  BadgeCheck,
   CheckCircle2,
   ChevronDown,
   FileSearch,
@@ -67,6 +66,15 @@ const getHeatClass = (count) => {
   if (count === 2) return 'warm';
   if (count === 1) return 'mild';
   return 'none';
+};
+
+const uniqueByKey = (items = [], getKey = (item) => item) =>
+  items.filter((item, index, array) => index === array.findIndex((candidate) => getKey(candidate) === getKey(item)));
+
+const getRiskBandCopy = (score) => {
+  if (score >= 3) return { level: 'HIGH', range: '3 or more points' };
+  if (score >= 1) return { level: 'MEDIUM', range: '1 to 2 points' };
+  return { level: 'LOW', range: '0 points' };
 };
 
 const DONUT_CONFIG = {
@@ -305,14 +313,33 @@ const ClauseCard = ({ clause, idx }) => {
   const [loading, setLoading] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [explanationOpen, setExplanationOpen] = useState(false);
+  const detailsPanelId = useId();
 
-  const matchedRules    = clause.matched_rules    || [];
-  const positiveSignals = clause.positive_signals || [];
-  const recommendations = clause.recommendations  || [];
+  const matchedRules = uniqueByKey(clause.matched_rules || [], (rule) => `${rule.rule_id || rule.label}-${rule.evidence || ''}`);
+  const positiveSignals = uniqueByKey(clause.positive_signals || [], (signal) => `${signal.label}-${signal.evidence || ''}`);
+  const recommendations = uniqueByKey((clause.recommendations || []).filter(Boolean));
+  const scoreBreakdown = [
+    ...matchedRules.map((rule) => ({
+      kind: 'risk',
+      label: rule.label,
+      evidence: rule.evidence,
+      impact: Number(rule.impact || 0),
+    })),
+    ...positiveSignals
+      .filter((signal) => Number(signal.impact || 0) !== 0)
+      .map((signal) => ({
+        kind: 'protection',
+        label: signal.label,
+        evidence: signal.evidence,
+        impact: Number(signal.impact || 0),
+      })),
+  ].sort((left, right) => Math.abs(right.impact) - Math.abs(left.impact));
+  const riskScore = Number(clause.risk_score || 0);
+  const riskBand = getRiskBandCopy(riskScore);
   const topRule             = matchedRules[0]?.label    || 'No major trigger';
   const topPositive         = positiveSignals[0]?.label || 'No clear protection';
   const topRecommendation   = recommendations[0]        || 'No immediate redraft priority';
-  const hasExtraDetails = matchedRules.length > 1 || positiveSignals.length > 0 || recommendations.length > 1 || matchedRules[0]?.evidence;
+  const hasExtraDetails = matchedRules.length > 0 || positiveSignals.length > 0 || recommendations.length > 0;
 
   const handleExplain = async () => {
     if (explanation) { setExplanationOpen(!explanationOpen); return; }
@@ -355,6 +382,7 @@ const ClauseCard = ({ clause, idx }) => {
       </div>
 
       <div className="clause-mini-grid">
+        <div className="mini-stat"><span className="mini-label">Risk score</span><strong>{riskScore} points</strong></div>
         <div className="mini-stat"><span className="mini-label">Trigger</span><strong>{topRule}</strong></div>
         <div className="mini-stat"><span className="mini-label">Protection</span><strong>{topPositive}</strong></div>
         <div className="mini-stat"><span className="mini-label">Next step</span><strong>{topRecommendation}</strong></div>
@@ -362,8 +390,14 @@ const ClauseCard = ({ clause, idx }) => {
 
       <div className="clause-actions">
         {hasExtraDetails && (
-          <button type="button" onClick={() => setDetailsOpen(!detailsOpen)}
-            className="explain-btn secondary" data-html2canvas-ignore="true">
+          <button
+            type="button"
+            onClick={() => setDetailsOpen(!detailsOpen)}
+            className="explain-btn secondary"
+            data-html2canvas-ignore="true"
+            aria-expanded={detailsOpen}
+            aria-controls={detailsPanelId}
+          >
             <ChevronDown size={14} style={{ transform: detailsOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
             {detailsOpen ? 'Hide details' : 'View details'}
           </button>
@@ -376,40 +410,56 @@ const ClauseCard = ({ clause, idx }) => {
       </div>
 
       {detailsOpen && (
-        <div className="details-stack">
-          <div className="detail-grid">
-            <section className="detail-panel">
-              <div className="detail-title"><AlertTriangle size={16} />Why this was flagged</div>
-              {matchedRules.length > 0 ? (
-                <div className="chip-list">
-                  {matchedRules.slice(0,3).map(rule => (
-                    <div key={rule.rule_id} className="detail-chip risk-chip compact">
-                      <strong>{rule.label}</strong>
-                      {rule.evidence && <em>Evidence: {rule.evidence}</em>}
-                    </div>
-                  ))}
-                </div>
-              ) : <p className="detail-empty">No major risk triggers fired for this clause.</p>}
-            </section>
-            <section className="detail-panel">
-              <div className="detail-title"><BadgeCheck size={16} />Helpful protections</div>
-              {positiveSignals.length > 0 ? (
-                <div className="chip-list">
-                  {positiveSignals.slice(0,3).map((sig,i) => (
-                    <div key={`${sig.label}-${i}`} className="detail-chip positive-chip compact">
-                      <strong>{sig.label}</strong>
-                      {sig.evidence && <em>Evidence: {sig.evidence}</em>}
-                    </div>
-                  ))}
-                </div>
-              ) : <p className="detail-empty">No protective drafting signals detected.</p>}
-            </section>
+        <div className="details-stack" id={detailsPanelId}>
+          <div className="detail-overview">
+            <span>{riskScore} total points</span>
+            <span>{matchedRules.length} trigger{matchedRules.length === 1 ? '' : 's'}</span>
+            <span>{positiveSignals.length} protection{positiveSignals.length === 1 ? '' : 's'}</span>
+            <span>{recommendations.length} recommendation{recommendations.length === 1 ? '' : 's'}</span>
           </div>
+          <section className="score-panel">
+            <div className="detail-title"><ShieldAlert size={16} />Risk score explanation</div>
+            <div className="score-summary">
+              <div className="score-total-card">
+                <span>Total score</span>
+                <strong>{riskScore}</strong>
+                <small>{clause.risk_level} risk</small>
+              </div>
+              <div className="score-threshold-copy">
+                <strong>How the score works</strong>
+                <p>
+                  The engine adds points for risk triggers and subtracts points for protections that reduce exposure.
+                  A score in the <strong>{riskBand.range}</strong> band is classified as <strong>{riskBand.level}</strong> risk.
+                </p>
+              </div>
+            </div>
+            {scoreBreakdown.length > 0 ? (
+              <div className="score-breakdown-list">
+                {scoreBreakdown.map((item, breakdownIndex) => (
+                  <div
+                    key={`${item.kind}-${item.label}-${breakdownIndex}`}
+                    className={`score-breakdown-item ${item.kind === 'risk' ? 'risk' : 'protection'}`}
+                  >
+                    <div className="score-impact-pill">
+                      {item.impact > 0 ? `+${item.impact}` : item.impact}
+                    </div>
+                    <div className="score-breakdown-copy">
+                      <strong>{item.label}</strong>
+                      <span>{item.kind === 'risk' ? 'Raised the score' : 'Reduced the score'}</span>
+                      {item.evidence && <em>Evidence: {item.evidence}</em>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="detail-empty">No scored triggers or offsetting protections were recorded for this clause.</p>
+            )}
+          </section>
           <section className="recommendation-panel">
-            <div className="detail-title"><Target size={16} />Additional recommendations</div>
-            {recommendations.length > 1 ? (
+            <div className="detail-title"><Target size={16} />Recommended next steps</div>
+            {recommendations.length > 0 ? (
               <ul className="recommendation-list compact">
-                {recommendations.slice(1).map((rec,i) => <li key={`${rec}-${i}`}>{rec}</li>)}
+                {recommendations.map((rec,i) => <li key={`${rec}-${i}`}>{rec}</li>)}
               </ul>
             ) : <p className="detail-empty">No further recommendations beyond the main action shown above.</p>}
           </section>
