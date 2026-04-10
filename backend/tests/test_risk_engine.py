@@ -83,6 +83,16 @@ class RiskEngineTests(unittest.TestCase):
         self.assertEqual(score_reducing_signals.get("Liability cap present"), -1)
         self.assertEqual(score_reducing_signals.get("Cure period present"), -1)
 
+    def test_permitted_disclosure_clause_does_not_double_count_one_sided_language(self):
+        clause = (
+            "A Receiving Party shall not be restricted from disclosing Confidential Information if required by law. "
+            "The Receiving Party shall promptly notify the Disclosing Party where legally permitted."
+        )
+        result = assess_risk(clause, "Permitted disclosures and exceptions clause")
+
+        one_sided_rules = [rule for rule in result["matched_rules"] if "One-sided" in rule["label"]]
+        self.assertEqual(len(one_sided_rules), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
