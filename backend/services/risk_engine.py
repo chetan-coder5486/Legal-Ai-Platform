@@ -487,8 +487,17 @@ def assess_risk(clause_text: str, clause_type: str) -> dict:
         )
 
     # One-sided obligations on receiving party
-    if (re.search(r"receiving\s+party\s+(shall|must|agrees|will)", text)
-            and not re.search(r"disclosing\s+party\s+(shall|must|agrees|will)", text)):
+    has_existing_one_sided_signal = any(
+        rule.get("rule_id") == "one_sided_receiving_party"
+        for rule in matched_rules
+    )
+
+    if (
+        category in ("confidentiality", "obligations of confidentiality")
+        and not has_existing_one_sided_signal
+        and re.search(r"receiving\s+party\s+(shall|must|agrees|will)", text)
+        and not re.search(r"disclosing\s+party\s+(shall|must|agrees|will)", text)
+    ):
         score += _add_risk(
             matched_rules, reasons, recommendations,
             "one_sided",
