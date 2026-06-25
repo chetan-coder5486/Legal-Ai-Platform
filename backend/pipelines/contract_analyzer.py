@@ -1,14 +1,6 @@
 import re
 
-try:
-    from sentence_transformers import SentenceTransformer, util
-    _ST_IMPORT_ERROR = None
-except Exception as e:
-    # Handles locked-down environments where torch DLL loading is blocked.
-    SentenceTransformer = None
-    util = None
-    _ST_IMPORT_ERROR = e
-
+from sentence_transformers import SentenceTransformer, util
 from backend.services.risk_engine import assess_risk
 
 model = None
@@ -94,7 +86,7 @@ def get_model():
     if model is None:
         try:
             print("[classifier] Loading Sentence Transformer model...")
-            model = SentenceTransformer("all-MiniLM-L6-v2")
+            model = SentenceTransformer("nlpaueb/legal-bert-base-uncased")
             label_embeddings = model.encode(labels, convert_to_tensor=True)
         except Exception as e:
             model_load_failed = True
@@ -123,7 +115,6 @@ def _classify_clause_by_rules(clause: str):
         return "Obligations of confidentiality and non-disclosure clause", 0.45
 
     return "Unclassified clause", 0.2
-
 
 def segment_clauses(text: str) -> list:
     """
