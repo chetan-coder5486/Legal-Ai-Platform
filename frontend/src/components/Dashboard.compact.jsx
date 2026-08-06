@@ -723,6 +723,13 @@ const ClauseCard = ({ clause, idx, documentId }) => {
 
   const matchedRules = clause.matched_rules || [];
   const positiveSignals = clause.positive_signals || [];
+  const clauseHighlights = buildClauseHighlights(
+  clause.clause_text,
+  [
+    ...(clause.matched_rules || []),
+    ...(clause.positive_signals || [])
+  ]
+);
   const recommendations = clause.recommendations || [];
   const topRule = matchedRules[0]?.label || "No major trigger";
   const topPositive = positiveSignals[0]?.label || "No clear protection";
