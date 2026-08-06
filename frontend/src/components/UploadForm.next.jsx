@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import axios from 'axios';
+import { useRef, useState } from "react";
+import axios from "axios";
 import {
   BrainCircuit,
   CheckCircle,
@@ -8,41 +8,31 @@ import {
   FileText,
   Gavel,
   Scale,
-  ShieldCheck,
   ScrollText,
+  ShieldCheck,
   Sparkles,
   UploadCloud,
-} from 'lucide-react';
+} from "lucide-react";
 
 const PIPELINES = {
   analyze_contract: {
     icon: ShieldCheck,
-    title: 'Contract Risk Review',
-    subtitle: 'Best for NDAs, commercial agreements, and clause-level negotiation prep.',
+    title: "Contract Risk Review",
+    subtitle:
+      "Best for NDAs, commercial agreements, and clause-level negotiation prep.",
     features: [
-      'Classifies clauses and scores legal exposure',
-      'Shows triggered rules and protective signals',
-      'Produces negotiation-ready recommendations',
+      "Classifies clauses and scores legal exposure",
+      "Shows triggered rules and protective signals",
+      "Produces negotiation-ready recommendations",
     ],
-    cta: 'Analyze Contract',
-  },
-  summarize_case: {
-    icon: ScrollText,
-    title: 'Long Document Summary',
-    subtitle: 'Best for judgments, pleadings, and lengthy legal records.',
-    features: [
-      'Condenses long documents into clear summaries',
-      'Highlights the core narrative and issues',
-      'Useful when you need fast orientation first',
-    ],
-    cta: 'Summarize Document',
+    cta: "Analyze Contract",
   },
 };
 
 const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState(null);
-  const [taskType, setTaskType] = useState('analyze_contract');
+  const [taskType] = useState("analyze_contract");
   const inputRef = useRef(null);
 
   const selectedPipeline = PIPELINES[taskType];
@@ -51,9 +41,9 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
+    if (e.type === "dragenter" || e.type === "dragover") {
       setDragActive(true);
-    } else if (e.type === 'dragleave') {
+    } else if (e.type === "dragleave") {
       setDragActive(false);
     }
   };
@@ -76,17 +66,17 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
 
   const handleFileSelection = (selectedFile) => {
     const validTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain',
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "text/plain",
     ];
     const validExtension =
-      selectedFile.name.endsWith('.pdf') ||
-      selectedFile.name.endsWith('.docx') ||
-      selectedFile.name.endsWith('.txt');
+      selectedFile.name.endsWith(".pdf") ||
+      selectedFile.name.endsWith(".docx") ||
+      selectedFile.name.endsWith(".txt");
 
     if (!validTypes.includes(selectedFile.type) && !validExtension) {
-      onError('Please upload a PDF, DOCX, or TXT file.');
+      onError("Please upload a PDF, DOCX, or TXT file.");
       return;
     }
     setFile(selectedFile);
@@ -103,78 +93,98 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
     onUploadStart();
 
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('task_type', taskType);
+    formData.append("file", file);
+    formData.append("task_type", taskType);
 
     try {
       const response = await axios.post(
-        'http://localhost:8000/api/upload',
+        "http://localhost:8000/api/upload",
         formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
+        { headers: { "Content-Type": "multipart/form-data" } },
       );
 
       const data = response.data;
 
-      if (taskType === 'summarize_case') {
-        onUploadComplete({
-          type: 'summary',
-          filename: file.name,                              // ← filename added
-          content: data.results,                           // full results so App.jsx can find summary_data
-        });
-      } else {
-        onUploadComplete({
-          type: 'contract',
-          filename: file.name,                              // ← filename added
-          content: data.results,                           // { task_type, metadata, contract_analysis }
-        });
-      }
-
+      onUploadComplete({
+        type: "contract",
+        filename: file.name,
+        content: data.results,
+      });
     } catch (err) {
-      console.error('Upload error:', err);
+      console.error("Upload error:", err);
       onError(
         err.response?.data?.detail ||
-        'Failed to process document. Is the backend running?'
+          "Failed to process document. Is the backend running?",
       );
     }
   };
 
   return (
     <div className="upload-shell animate-slide-up">
-      <form onSubmit={handleSubmit} className="glass-panel upload-command-center">
+      <form
+        onSubmit={handleSubmit}
+        className="glass-panel upload-command-center"
+      >
         <section className="legal-ai-hero">
           <div className="hero-kicker">Legal AI Chamber</div>
-          <h2>Brownstone intelligence for contracts, clauses, and case files.</h2>
+          <h2>
+            Brownstone intelligence for contracts, clauses, and case files.
+          </h2>
           <p>
-            A single-screen legal workspace built for fast review. Upload once, choose the analysis path, and get an
-            AI-assisted legal reading without leaving the page.
+            A single-screen legal workspace built for fast review. Upload once,
+            choose the analysis path, and get an AI-assisted legal reading
+            without leaving the page.
           </p>
 
           <div className="hero-symbol-row">
-            <div className="hero-symbol-card"><Scale size={18} /><span>Legal reasoning</span></div>
-            <div className="hero-symbol-card"><BrainCircuit size={18} /><span>AI assistance</span></div>
-            <div className="hero-symbol-card"><ShieldCheck size={18} /><span>Risk review</span></div>
+            <div className="hero-symbol-card">
+              <Scale size={18} />
+              <span>Legal reasoning</span>
+            </div>
+            <div className="hero-symbol-card">
+              <BrainCircuit size={18} />
+              <span>AI assistance</span>
+            </div>
+            <div className="hero-symbol-card">
+              <ShieldCheck size={18} />
+              <span>Risk review</span>
+            </div>
           </div>
 
           <div className="hero-insight-grid">
             <article className="hero-insight-card">
-              <div className="hero-insight-icon"><Gavel size={18} /></div>
+              <div className="hero-insight-icon">
+                <Gavel size={18} />
+              </div>
               <div>
                 <strong>Contract risk review</strong>
-                <span>Clause classification, legal exposure scoring, and negotiation-ready recommendations.</span>
+                <span>
+                  Clause classification, legal exposure scoring, and
+                  negotiation-ready recommendations.
+                </span>
               </div>
             </article>
             <article className="hero-insight-card">
-              <div className="hero-insight-icon"><ScrollText size={18} /></div>
+              <div className="hero-insight-icon">
+                <ScrollText size={18} />
+              </div>
               <div>
                 <strong>Long document summary</strong>
-                <span>Fast orientation for judgments, pleadings, and lengthy legal records.</span>
+                <span>
+                  Fast orientation for judgments, pleadings, and lengthy legal
+                  records.
+                </span>
               </div>
             </article>
             <article className="hero-insight-card">
-              <div className="hero-insight-icon"><FileBadge2 size={18} /></div>
+              <div className="hero-insight-icon">
+                <FileBadge2 size={18} />
+              </div>
               <div>
                 <strong>Accepted formats</strong>
-                <span>PDF, DOCX, and TXT supported in the same intake flow.</span>
+                <span>
+                  PDF, DOCX, and TXT supported in the same intake flow.
+                </span>
               </div>
             </article>
           </div>
@@ -192,28 +202,20 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
 
           <div className="intake-section-head">
             <Sparkles size={18} />
-            <h3>Choose Analysis Mode</h3>
+            <h3>Analysis Mode</h3>
           </div>
 
           <div className="pipeline-stack">
-            {Object.entries(PIPELINES).map(([value, pipeline]) => {
-              const Icon = pipeline.icon;
-              const active = value === taskType;
-              return (
-                <button key={value} type="button"
-                  className={`pipeline-option ${active ? 'active' : ''}`}
-                  onClick={() => setTaskType(value)}>
-                  <div className="pipeline-option-top">
-                    <Icon size={20} />
-                    <div>
-                      <span>{pipeline.title}</span>
-                      <small>{pipeline.cta}</small>
-                    </div>
-                  </div>
-                  <p>{pipeline.subtitle}</p>
-                </button>
-              );
-            })}
+            <div className="pipeline-option active" role="presentation">
+              <div className="pipeline-option-top">
+                <SelectedIcon size={20} />
+                <div>
+                  <span>{selectedPipeline.title}</span>
+                  <small>{selectedPipeline.cta}</small>
+                </div>
+              </div>
+              <p>{selectedPipeline.subtitle}</p>
+            </div>
           </div>
 
           <div className="intake-section-head">
@@ -222,23 +224,32 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
           </div>
 
           <div
-            className={`upload-zone upload-zone-primary ${dragActive ? 'drag-active' : ''}`}
+            className={`upload-zone upload-zone-primary ${dragActive ? "drag-active" : ""}`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
             onClick={onButtonClick}
           >
-            <input ref={inputRef} type="file" onChange={handleChange}
-              accept=".pdf,.docx,.txt" style={{ display: 'none' }} />
+            <input
+              ref={inputRef}
+              type="file"
+              onChange={handleChange}
+              accept=".pdf,.docx,.txt"
+              style={{ display: "none" }}
+            />
 
             {!file ? (
               <>
                 <UploadCloud className="upload-icon" />
                 <h3>Drop your legal document here</h3>
-                <p style={{ color: 'var(--text-secondary)' }}>or click to browse from your computer</p>
+                <p style={{ color: "var(--text-secondary)" }}>
+                  or click to browse from your computer
+                </p>
                 <div className="upload-support-row">
-                  <span>PDF</span><span>DOCX</span><span>TXT</span>
+                  <span>PDF</span>
+                  <span>DOCX</span>
+                  <span>TXT</span>
                 </div>
               </>
             ) : (
@@ -258,14 +269,21 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
             <div className="upload-meta upload-meta-compact">
               <strong>What happens next</strong>
               <span>
-                {taskType === 'summarize_case'
-                  ? 'The system will generate an AI-powered summary with fallback support if needed.'
-                  : 'The system will segment clauses, classify them, run the risk engine, and build a report.'}
+                The system will segment clauses, classify them, run the risk
+                engine, and build a report.
               </span>
             </div>
 
-            <button type="submit" className="btn-primary btn-legal" disabled={!file}
-              style={{ width: '100%', padding: '1rem 1.15rem', fontSize: '1rem' }}>
+            <button
+              type="submit"
+              className="btn-primary btn-legal"
+              disabled={!file}
+              style={{
+                width: "100%",
+                padding: "1rem 1.15rem",
+                fontSize: "1rem",
+              }}
+            >
               {selectedPipeline.cta}
             </button>
 

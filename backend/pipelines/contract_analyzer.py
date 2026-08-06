@@ -1,4 +1,5 @@
 import re
+from tracemalloc import start
 
 from sentence_transformers import SentenceTransformer, util
 from backend.services.risk_engine import assess_risk
@@ -229,7 +230,7 @@ def run_contract_analysis(text: str) -> dict:
     total_detected = len(clauses)
     analyzed_clauses = []
 
-    for clause in clauses:
+    for idx,clause in enumerate(clauses,start=1):
         try:
             top_label, confidence = classify_clause(clause)
 
@@ -248,6 +249,7 @@ def run_contract_analysis(text: str) -> dict:
                 }
 
             analyzed_clauses.append({
+                "id": idx,
                 "clause_text": clause,
                 "type": top_label,
                 "confidence": round(confidence, 3),
@@ -262,7 +264,9 @@ def run_contract_analysis(text: str) -> dict:
             })
         except Exception as e:
             print(f"[contract_analyzer] Error processing clause: {e}")
-
+    
+        
+    
     high = sum(1 for c in analyzed_clauses if c["risk_level"] == "HIGH")
     medium = sum(1 for c in analyzed_clauses if c["risk_level"] == "MEDIUM")
     low = sum(1 for c in analyzed_clauses if c["risk_level"] == "LOW")
