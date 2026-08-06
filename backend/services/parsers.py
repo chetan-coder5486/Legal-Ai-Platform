@@ -1,21 +1,10 @@
+from pathlib import Path
 import io
 import re
 import shutil
-from pathlib import Path
-try:
-    import fitz  # PyMuPDF
-except ImportError:
-    fitz = None
-
-try:
-    import pdfplumber
-except ImportError:
-    pdfplumber = None
-
-try:
-    import docx
-except ImportError:
-    docx = None
+import fitz
+import pdfplumber
+import docx
 
 # ─── Optional OCR (only needed for scanned PDFs) ───────────────────────────
 

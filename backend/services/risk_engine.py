@@ -418,6 +418,44 @@ def assess_risk(clause_text: str, clause_type: str) -> dict:
             "receiving party shall / disclosing party shall",
         )
 
+    if category in ("confidentiality", "obligations of confidentiality"):
+        if re.search(r"same degree of protection|same degree of care|at least the same degree of care|reasonable efforts to protect", text):
+            _add_positive(
+                positive_signals,
+                "Confidentiality standard present",
+                _extract_evidence(
+                    text,
+                    [
+                        r"same degree of protection",
+                        r"same degree of care",
+                        r"at least the same degree of care",
+                        r"reasonable efforts to protect",
+                    ],
+                ),
+            )
+
+        if re.search(r"need to know|authorized representatives|employees, agents|representatives who need to know", text):
+            _add_positive(
+                positive_signals,
+                "Need-to-know access control",
+                _extract_evidence(
+                    text,
+                    [
+                        r"need to know",
+                        r"authorized representatives",
+                        r"employees, agents",
+                        r"representatives who need to know",
+                    ],
+                ),
+            )
+
+        if re.search(r"required by law|court order|compelled disclosure", text):
+            _add_positive(
+                positive_signals,
+                "Disclosure carve-out present",
+                _extract_evidence(text, [r"required by law", r"court order", r"compelled disclosure"]),
+            )
+
     if "transfer of ownership" in text and "no explicit or implied transfer of ownership" not in text:
         score += _add_risk(
             matched_rules,

@@ -19,8 +19,10 @@ class ClauseRequest(BaseModel):
     risk_reason: str
 
 
-class PrecedentRequest(BaseModel):
-    clause_text: str
+class ChatRequest(BaseModel):
+    document_id: str
+    question: str
+    top_k: int = 5
 
 
 class RedraftRequest(BaseModel):          # NEW
@@ -53,7 +55,7 @@ async def upload_document(
             )
 
         # Continual Learning: ingest into ChromaDB in the background
-        if task_type in ("analyze_contract", "summarize_case"):
+        if task_type == "analyze_contract":
             background_tasks.add_task(ingest_document, file.filename, text)
 
         try:
@@ -125,16 +127,56 @@ async def redraft_clause(req: RedraftRequest) -> Dict[str, Any]:
 
 
 @router.post("/find-precedents")
-async def find_precedents(req: PrecedentRequest) -> Dict[str, Any]:
+async def find_precedents(req: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Looks up similar past clauses from ChromaDB vector store.
+    Looks up similar clauses within the current document's RAG collection.
     """
     try:
-        from backend.pipelines.research_agent import search_precedents
-        results = search_precedents(req.clause_text, top_k=3)
+        from backend.services.document_rag import DocumentRAG
+
+        document_id = req.get("document_id")
+        clause_text = req.get("clause_text")
+        clause_id = req.get("clause_id")
+
+        if not document_id or not clause_text:
+            raise HTTPException(
+                status_code=400,
+                detail="document_id and clause_text are required.",
+            )
+
+        rag = DocumentRAG()
+        results = rag.search(
+            document_id=document_id,
+            query=clause_text,
+            top_k=3,
+            exclude_clause_id=clause_id,
+        )
         return {
             "status": "success",
             "precedents": results,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ask-document")
+async def ask_document(req: ChatRequest) -> Dict[str, Any]:
+    """
+    Answers contract questions using the uploaded document's own RAG collection.
+    """
+    try:
+        from backend.services.document_rag import DocumentRAG
+
+        rag = DocumentRAG()
+        result = rag.ask(
+            document_id=req.document_id,
+            question=req.question,
+            top_k=req.top_k,
+        )
+
+        return {
+            "status": "success",
+            **result,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
