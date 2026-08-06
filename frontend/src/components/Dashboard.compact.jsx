@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import axios from "axios";
 import {
   AlertTriangle,
-  BadgeCheck,
   CheckCircle2,
   ChevronDown,
   Bot,
@@ -75,6 +74,165 @@ const getHeatClass = (count) => {
   if (count === 2) return "warm";
   if (count === 1) return "mild";
   return "none";
+};
+
+const uniqueByKey = (items = [], getKey = (item) => item) =>
+  items.filter((item, index, array) => index === array.findIndex((candidate) => getKey(candidate) === getKey(item)));
+
+const getRiskBandCopy = (score) => {
+  if (score >= 3) return { level: 'HIGH', range: '3 or more points' };
+  if (score >= 1) return { level: 'MEDIUM', range: '1 to 2 points' };
+  return { level: 'LOW', range: '0 points' };
+};
+
+const normalizeForMatch = (value = '') => value.replace(/\s+/g, ' ').trim();
+
+const splitEvidenceIntoSegments = (evidence = '') => {
+  const normalizedEvidence = normalizeForMatch(evidence);
+
+  if (!normalizedEvidence || /not found/i.test(normalizedEvidence)) {
+    return [];
+  }
+
+  return normalizedEvidence
+    .split(/\s*\/\s*/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length >= 3);
+};
+
+const findAllTextMatches = (sourceText = '', searchText = '') => {
+  if (!sourceText || !searchText) return [];
+
+  const haystack = sourceText.toLowerCase();
+  const needle = searchText.toLowerCase();
+  const matches = [];
+  let startIndex = 0;
+
+  while (startIndex < haystack.length) {
+    const matchIndex = haystack.indexOf(needle, startIndex);
+    if (matchIndex === -1) break;
+
+    matches.push({
+      start: matchIndex,
+      end: matchIndex + needle.length,
+    });
+
+    startIndex = matchIndex + Math.max(needle.length, 1);
+  }
+
+  return matches;
+};
+
+const chooseHighlightForRange = (highlights = []) =>
+  [...highlights].sort((left, right) => {
+    const impactDelta = Math.abs(right.impact || 0) - Math.abs(left.impact || 0);
+    if (impactDelta !== 0) return impactDelta;
+
+    if (left.kind !== right.kind) {
+      return left.kind === 'risk' ? -1 : 1;
+    }
+
+    const lengthDelta = (right.end - right.start) - (left.end - left.start);
+    if (lengthDelta !== 0) return lengthDelta;
+
+    return String(left.label || '').localeCompare(String(right.label || ''));
+  })[0];
+
+const buildClauseHighlights = (clauseText, scoreBreakdown = []) => {
+  const sourceText = clauseText || '';
+  const seen = new Set();
+  const rawHighlights = [];
+
+  scoreBreakdown
+    .filter((item) => item?.evidence && item.evidence.trim().length >= 3 && Number(item.impact || 0) !== 0)
+    .forEach((item) => {
+      const segments = splitEvidenceIntoSegments(item.evidence);
+
+      segments.forEach((segment) => {
+        findAllTextMatches(sourceText, segment).forEach(({ start, end }) => {
+          const key = `${item.kind}-${item.label}-${start}-${end}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+
+          rawHighlights.push({
+            start,
+            end,
+            evidence: segment,
+            impact: Number(item.impact || 0),
+            kind: item.kind === 'protection' ? 'protection' : 'risk',
+            label: item.label,
+          });
+        });
+      });
+    });
+
+  if (!rawHighlights.length) return [];
+
+  const boundaries = [...new Set(rawHighlights.flatMap((highlight) => [highlight.start, highlight.end]))]
+    .sort((left, right) => left - right);
+
+  const resolvedHighlights = [];
+
+  for (let index = 0; index < boundaries.length - 1; index += 1) {
+    const start = boundaries[index];
+    const end = boundaries[index + 1];
+    const coveringHighlights = rawHighlights.filter((highlight) => highlight.start <= start && highlight.end >= end);
+
+    if (!coveringHighlights.length) continue;
+
+    const chosenHighlight = chooseHighlightForRange(coveringHighlights);
+    const previousHighlight = resolvedHighlights[resolvedHighlights.length - 1];
+
+    if (
+      previousHighlight &&
+      previousHighlight.end === start &&
+      previousHighlight.kind === chosenHighlight.kind &&
+      previousHighlight.label === chosenHighlight.label &&
+      previousHighlight.impact === chosenHighlight.impact
+    ) {
+      previousHighlight.end = end;
+      continue;
+    }
+
+    resolvedHighlights.push({
+      ...chosenHighlight,
+      start,
+      end,
+    });
+  }
+
+  return resolvedHighlights;
+};
+
+const renderHighlightedClauseText = (clauseText, highlights = []) => {
+  if (!highlights.length) return clauseText;
+
+  const content = [];
+  let cursor = 0;
+
+  highlights.forEach((highlight, index) => {
+    if (cursor < highlight.start) {
+      content.push(clauseText.slice(cursor, highlight.start));
+    }
+
+    content.push(
+      <mark
+        key={`${highlight.kind}-${highlight.start}-${highlight.end}-${index}`}
+        className={`clause-highlight ${highlight.kind}`}
+        title={highlight.label}
+      >
+        {clauseText.slice(highlight.start, highlight.end)}
+      </mark>
+    );
+
+    cursor = highlight.end;
+  });
+
+  if (cursor < clauseText.length) {
+    content.push(clauseText.slice(cursor));
+  }
+
+  return content;
 };
 
 const DONUT_CONFIG = {
@@ -609,8 +767,11 @@ const ClauseCard = ({ clause, idx, documentId }) => {
       </div>
 
       <div className="clause-preview">
-        <span className="preview-label">Preview</span>
-        <p>{clause.clause_text}</p>
+        <div className="preview-label-row">
+          <span className="preview-label">Preview</span>
+          {clauseHighlights.length > 0 && <span className="preview-hint">Underlined text marks detected evidence</span>}
+        </div>
+        <p>{renderHighlightedClauseText(clause.clause_text, clauseHighlights)}</p>
       </div>
 
       <div className="clause-mini-grid">
