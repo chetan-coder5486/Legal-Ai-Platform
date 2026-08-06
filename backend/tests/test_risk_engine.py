@@ -68,6 +68,31 @@ class RiskEngineTests(unittest.TestCase):
         self.assertTrue(any(signal["label"] == "Liability cap present" for signal in result["positive_signals"]))
         self.assertTrue(result["recommendations"])
 
+    def test_positive_signal_includes_score_reduction_when_applicable(self):
+        clause = (
+            "Either party may terminate this Agreement upon thirty days notice, and liability shall be limited to fees paid. "
+            "A cure period of fifteen days applies before termination for breach."
+        )
+        result = assess_risk(clause, "Termination of agreement clause")
+
+        score_reducing_signals = {
+            signal["label"]: signal.get("impact", 0)
+            for signal in result["positive_signals"]
+        }
+
+        self.assertEqual(score_reducing_signals.get("Liability cap present"), -1)
+        self.assertEqual(score_reducing_signals.get("Cure period present"), -1)
+
+    def test_permitted_disclosure_clause_does_not_double_count_one_sided_language(self):
+        clause = (
+            "A Receiving Party shall not be restricted from disclosing Confidential Information if required by law. "
+            "The Receiving Party shall promptly notify the Disclosing Party where legally permitted."
+        )
+        result = assess_risk(clause, "Permitted disclosures and exceptions clause")
+
+        one_sided_rules = [rule for rule in result["matched_rules"] if "One-sided" in rule["label"]]
+        self.assertEqual(len(one_sided_rules), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

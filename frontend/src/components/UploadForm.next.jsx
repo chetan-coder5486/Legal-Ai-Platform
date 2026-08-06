@@ -4,7 +4,6 @@ import {
   BrainCircuit,
   CheckCircle,
   FileBadge2,
-  FileSearch,
   FileText,
   Gavel,
   Scale,
@@ -103,7 +102,7 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
         { headers: { "Content-Type": "multipart/form-data" } },
       );
 
-      const data = response.data;
+      const resultPayload = response.data?.results;
 
       onUploadComplete({
         type: "contract",

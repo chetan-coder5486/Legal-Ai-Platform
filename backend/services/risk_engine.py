@@ -94,11 +94,12 @@ def _add_risk(
     return impact
 
 
-def _add_positive(positive_signals: list, label: str, evidence: str) -> None:
+def _add_positive(positive_signals: list, label: str, evidence: str, impact: int = 0) -> None:
     positive_signals.append(
         {
             "label": label,
             "evidence": evidence,
+            "impact": impact,
         }
     )
 
@@ -169,6 +170,7 @@ def assess_risk(clause_text: str, clause_type: str) -> dict:
             positive_signals,
             "Liability cap present",
             _extract_evidence(text, [r"liability cap", r"capped at", r"limited to"]),
+            -1,
         )
 
     if "exclude" in text and ("indirect damages" in text or "consequential damages" in text):
@@ -237,6 +239,7 @@ def assess_risk(clause_text: str, clause_type: str) -> dict:
             positive_signals,
             "Cure period present",
             "cure period",
+            -1,
         )
 
     years = _extract_years(text)
@@ -522,8 +525,17 @@ def assess_risk(clause_text: str, clause_type: str) -> dict:
         )
 
     # One-sided obligations on receiving party
-    if (re.search(r"receiving\s+party\s+(shall|must|agrees|will)", text)
-            and not re.search(r"disclosing\s+party\s+(shall|must|agrees|will)", text)):
+    has_existing_one_sided_signal = any(
+        rule.get("rule_id") == "one_sided_receiving_party"
+        for rule in matched_rules
+    )
+
+    if (
+        category in ("confidentiality", "obligations of confidentiality")
+        and not has_existing_one_sided_signal
+        and re.search(r"receiving\s+party\s+(shall|must|agrees|will)", text)
+        and not re.search(r"disclosing\s+party\s+(shall|must|agrees|will)", text)
+    ):
         score += _add_risk(
             matched_rules, reasons, recommendations,
             "one_sided",
