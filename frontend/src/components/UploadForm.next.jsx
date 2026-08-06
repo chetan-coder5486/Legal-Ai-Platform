@@ -107,7 +107,7 @@ const UploadForm = ({ onUploadStart, onUploadComplete, onError }) => {
       onUploadComplete({
         type: "contract",
         filename: file.name,
-        content: data.results,
+        content: response.data.results,
       });
     } catch (err) {
       console.error("Upload error:", err);
