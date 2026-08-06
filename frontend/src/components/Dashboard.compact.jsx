@@ -286,7 +286,12 @@ const DonutChart = ({
 };
 
 /* ─── PRECEDENTS PANEL ───────────────────────────────────────────────────── */
-const PrecedentsPanel = ({ clauseText, documentId, clauseId }) => {
+const PrecedentsPanel = ({
+  clauseText,
+  documentId,
+  clauseId,
+  onJumpToClause,
+}) => {
   const [precedents, setPrecedents] = useState(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -339,7 +344,7 @@ const PrecedentsPanel = ({ clauseText, documentId, clauseId }) => {
       {open && (
         <div className="precedents-panel">
           <div className="detail-title" style={{ marginBottom: "0.5rem" }}>
-            <BookOpen size={16} /> Similar clauses in past documents
+            <BookOpen size={16} /> Similar clauses in this document
           </div>
           {loading && (
             <p className="detail-empty">Searching vector database...</p>
@@ -352,10 +357,18 @@ const PrecedentsPanel = ({ clauseText, documentId, clauseId }) => {
           {!loading && precedents?.length > 0 && (
             <div className="chip-list">
               {precedents.map((p, i) => (
-                <div key={i} className="detail-chip precedent-chip compact">
-                  <strong>{p.metadata?.source || "Past document"}</strong>
-                  <em>{(p.text || "").slice(0, 120)}...</em>
-                </div>
+                <button
+                  key={i}
+                  type="button"
+                  className="detail-chip precedent-chip compact precedent-chip-button"
+                  onClick={() => onJumpToClause?.(p.metadata?.clause_id)}
+                  disabled={!p.metadata?.clause_id}
+                >
+                  <strong>
+                    {p.source || p.metadata?.source || "This document"}
+                  </strong>
+                  <em>{(p.text || p.document || "").slice(0, 120)}...</em>
+                </button>
               ))}
             </div>
           )}
@@ -563,6 +576,14 @@ const ClauseCard = ({ clause, idx, documentId }) => {
     recommendations.length > 1 ||
     matchedRules[0]?.evidence;
 
+  const jumpToClause = (targetClauseId) => {
+    if (!targetClauseId) return;
+    const target = document.getElementById(`clause-${targetClauseId}`);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   const handleExplain = async () => {
     if (explanation) {
       setExplanationOpen(!explanationOpen);
@@ -588,7 +609,10 @@ const ClauseCard = ({ clause, idx, documentId }) => {
   const riskLevel = clause.risk_level || "LOW";
 
   return (
-    <article className={`clause-item risk-${riskLevel.toLowerCase()}`}>
+    <article
+      id={`clause-${clause.id}`}
+      className={`clause-item risk-${riskLevel.toLowerCase()}`}
+    >
       <div className="clause-header compact">
         <div>
           <div className="clause-eyebrow">Clause {idx + 1}</div>
@@ -673,6 +697,7 @@ const ClauseCard = ({ clause, idx, documentId }) => {
           clauseText={clause.clause_text}
           documentId={documentId}
           clauseId={clause.id}
+          onJumpToClause={jumpToClause}
         />
       </div>
 

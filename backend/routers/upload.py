@@ -19,12 +19,6 @@ class ClauseRequest(BaseModel):
     risk_reason: str
 
 
-class PrecedentRequest(BaseModel):
-    document_id: str
-    clause_text: str
-    clause_id: str | None = None
-
-
 class ChatRequest(BaseModel):
     document_id: str
     question: str
@@ -133,19 +127,29 @@ async def redraft_clause(req: RedraftRequest) -> Dict[str, Any]:
 
 
 @router.post("/find-precedents")
-async def find_precedents(req: PrecedentRequest) -> Dict[str, Any]:
+async def find_precedents(req: Dict[str, Any]) -> Dict[str, Any]:
     """
     Looks up similar clauses within the current document's RAG collection.
     """
     try:
         from backend.services.document_rag import DocumentRAG
 
+        document_id = req.get("document_id")
+        clause_text = req.get("clause_text")
+        clause_id = req.get("clause_id")
+
+        if not document_id or not clause_text:
+            raise HTTPException(
+                status_code=400,
+                detail="document_id and clause_text are required.",
+            )
+
         rag = DocumentRAG()
         results = rag.search(
-            document_id=req.document_id,
-            query=req.clause_text,
+            document_id=document_id,
+            query=clause_text,
             top_k=3,
-            exclude_clause_id=req.clause_id,
+            exclude_clause_id=clause_id,
         )
         return {
             "status": "success",

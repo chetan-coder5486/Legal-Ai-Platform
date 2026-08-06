@@ -1,5 +1,6 @@
 import chromadb
 from sentence_transformers import SentenceTransformer
+import re
 
 from backend.services.llm import answer_question
 
@@ -78,8 +79,10 @@ class DocumentRAG:
         for clause in analyzed_clauses:
 
             document = self.build_embedding_text(clause)
+            source = clause.get("heading") or f"Clause {clause['id']}"
 
             metadata = {
+                "source": source,
                 "clause_id": str(clause["id"]),
                 "heading": clause.get("heading", ""),
                 "type": clause["type"],
@@ -115,6 +118,9 @@ class DocumentRAG:
         exclude_clause_id: str | None = None,
     ):
 
+        if exclude_clause_id is not None:
+            exclude_clause_id = str(exclude_clause_id)
+
         try:
             collection = self.get_collection(document_id)
         except Exception:
@@ -133,14 +139,18 @@ class DocumentRAG:
         matches = []
 
         for i in range(len(results["ids"][0])):
+            metadata = results["metadatas"][0][i]
+            document = results["documents"][0][i]
             match = {
                 "id": results["ids"][0][i],
                 "distance": results["distances"][0][i],
-                "document": results["documents"][0][i],
-                "metadata": results["metadatas"][0][i],
+                "document": document,
+                "text": document,
+                "source": metadata.get("source", "This document"),
+                "metadata": metadata,
             }
 
-            if exclude_clause_id and match["metadata"].get("clause_id") == exclude_clause_id:
+            if exclude_clause_id and str(match["metadata"].get("clause_id")) == exclude_clause_id:
                 continue
 
             matches.append(match)
@@ -149,6 +159,51 @@ class DocumentRAG:
                 break
 
         return matches
+
+    def get_clauses_by_risk(
+        self,
+        document_id: str,
+        risk_level: str,
+    ):
+        try:
+            collection = self.get_collection(document_id)
+        except Exception:
+            return []
+
+        results = collection.get(where={"risk_level": risk_level})
+        matches = []
+
+        ids = results.get("ids", []) or []
+        documents = results.get("documents", []) or []
+        metadatas = results.get("metadatas", []) or []
+        distances = results.get("distances", []) or []
+
+        for i in range(len(ids)):
+            metadata = metadatas[i]
+            document = documents[i]
+            match = {
+                "id": ids[i],
+                "distance": distances[i] if i < len(distances) else None,
+                "document": document,
+                "text": document,
+                "source": metadata.get("source", "This document"),
+                "metadata": metadata,
+            }
+            matches.append(match)
+
+        return matches
+
+    def _detect_risk_query(self, question: str):
+        normalized = (question or "").lower()
+
+        if re.search(r"\b(high|highest)\s+risk\s+clauses?\b|\bhigh[-\s]?risk\s+clauses?\b", normalized):
+            return "HIGH"
+        if re.search(r"\b(medium|moderate)\s+risk\s+clauses?\b|\bmedium[-\s]?risk\s+clauses?\b", normalized):
+            return "MEDIUM"
+        if re.search(r"\b(low|lowest)\s+risk\s+clauses?\b|\blow[-\s]?risk\s+clauses?\b", normalized):
+            return "LOW"
+
+        return None
     
     def ask(
         self,
@@ -156,11 +211,19 @@ class DocumentRAG:
         question: str,
         top_k: int = 5,
     ):
-        matches = self.search(
-            document_id=document_id,
-            query=question,
-            top_k=top_k,
-        )
+        risk_level = self._detect_risk_query(question)
+
+        if risk_level:
+            matches = self.get_clauses_by_risk(
+                document_id=document_id,
+                risk_level=risk_level,
+            )
+        else:
+            matches = self.search(
+                document_id=document_id,
+                query=question,
+                top_k=top_k,
+            )
 
         context = []
 
@@ -180,6 +243,13 @@ class DocumentRAG:
             )
 
         context_text = "\n\n------------------\n\n".join(context)
+
+        if risk_level and not matches:
+            return {
+                "answer": f"There are no {risk_level.lower()}-risk clauses in this contract.",
+                "context": [],
+                "sources": [],
+            }
 
         answer = answer_question(
             question=question,
