@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Bot,
   X,
+  BadgeCheck,
   FileSearch,
   FileText,
   Grid2X2,
