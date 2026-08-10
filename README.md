@@ -1,4 +1,4 @@
-# Legal AI Platform
+# Legal AI Platform | [Demo Video](https://youtu.be/PQPsVzREruw)
 
 A full-stack Legal AI Platform that automates contract analysis, risk assessment, and legal research using Natural Language Processing (NLP), Large Language Models (LLMs), and Retrieval-Augmented Generation (RAG).
 
